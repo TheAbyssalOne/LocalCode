@@ -1,104 +1,40 @@
-# API Reference
+# Configuration and script reference
 
-## Environment Variables
+This project manages only custom OpenAI-compatible providers. OpenCode's built-in providers, authentication, agents, permissions, MCP servers, and TUI settings remain owned by OpenCode.
 
-### Provider API Keys
+## Paths
 
-Set these environment variables for the providers you want to use:
+| Purpose | Default | Override |
+|---|---|---|
+| OpenCode config | `~/.config/opencode/opencode.json` | `OPENCODE_CONFIG` |
+| OpenCode config root | `~/.config/opencode` | `XDG_CONFIG_HOME` |
+| Installed helper files | `~/.config/opencode/local-setup` | `OPENCODE_LOCAL_SETUP_DIR` |
+| Setup environment file | `<setup-dir>/.env.local` | `OPENCODE_LOCAL_ENV` |
 
-```bash
-# Cloud Providers
-export OPENAI_API_KEY="sk-..."           # OpenAI
-export ANTHROPIC_API_KEY="sk-ant-..."    # Anthropic (API key method)
-export FIREWORKS_API_KEY="fw_..."         # Fireworks AI
-export DEEPSEEK_API_KEY="sk-..."          # DeepSeek
-export XAI_API_KEY="xai-..."              # xAI (Grok)
-export GROQ_API_KEY="gsk_..."             # Groq
-export TOGETHER_API_KEY="..."             # Together AI
-export MISTRAL_API_KEY="..."              # Mistral AI
-export OPENROUTER_API_KEY="sk-or-..."     # OpenRouter
-export PERPLEXITY_API_KEY="pplx-..."      # Perplexity
-export GOOGLE_API_KEY="..."               # Google/Gemini
-export GEMINI_API_KEY="..."               # Alternative for Google
-export COHERE_API_KEY="..."               # Cohere
-export VERCEL_API_KEY="..."               # Vercel AI Gateway
+Both `.json` and JSONC content are accepted by the synchronizer. Output is normalized to strict JSON so OpenCode, editors, and automation can all consume it reliably.
 
-# Azure OpenAI
-export AZURE_OPENAI_API_KEY="..."
-export AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com"
-
-# Cloudflare
-export CLOUDFLARE_API_TOKEN="..."
-export CLOUDFLARE_ACCOUNT_ID="..."
-export CLOUDFLARE_GATEWAY_ID="..."        # For AI Gateway
-
-# AWS Bedrock
-export AWS_ACCESS_KEY_ID="..."
-export AWS_SECRET_ACCESS_KEY="..."
-export AWS_REGION="us-east-1"
-export AWS_BEARER_TOKEN_BEDROCK="..."     # Alternative: Bearer token
-```
-
-### LOCAL_API_BASE
-**Default:** `http://127.0.0.1:1234/v1`
-
-Your OpenAI-compatible API endpoint. Can be set to any OpenAI-compatible server:
-
-```bash
-# LM Studio (default)
-export LOCAL_API_BASE=http://localhost:1234/v1
-
-# Ollama
-export LOCAL_API_BASE=http://localhost:11434/v1
-
-# vLLM
-export LOCAL_API_BASE=http://localhost:8000/v1
-
-# Custom OpenAI-compatible service
-export LOCAL_API_BASE=https://api.your-service.com/v1
-```
-
-### OPENCODE_CONFIG
-**Default:** `~/.config/opencode/opencode.json`
-
-Custom path to OpenCode configuration file:
-
-```bash
-# Use custom config location
-export OPENCODE_CONFIG=/path/to/custom/opencode.json
-```
-
-### XDG_CONFIG_HOME
-**Default:** `~/.config`
-
-Custom config directory location:
-
-```bash
-# Use custom config directory
-export XDG_CONFIG_HOME=/home/user/my-configs
-# Config will be at: $XDG_CONFIG_HOME/opencode/opencode.json
-```
-
-## Configuration Schema
-
-OpenCode uses JSON configuration files. Here's the complete schema for local providers:
-
-### Basic Structure
+## Current provider shape
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
   "provider": {
-    "local": {
+    "my-local-server": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "Local Provider Name",
+      "name": "My local server",
       "options": {
-        "baseURL": "http://localhost:1234/v1"
+        "baseURL": "http://127.0.0.1:8000/v1",
+        "apiKey": "{env:LOCAL_API_KEY}"
       },
       "models": {
         "model-id": {
-          "name": "Display Name",
-          "tools": true
+          "name": "Model display name",
+          "tool_call": true,
+          "reasoning": true,
+          "limit": {
+            "context": 131072,
+            "output": 8192
+          }
         }
       }
     }
@@ -106,206 +42,126 @@ OpenCode uses JSON configuration files. Here's the complete schema for local pro
 }
 ```
 
-### Provider Configuration
+`@ai-sdk/openai-compatible` is appropriate for compatible `/v1/chat/completions` servers. A server or model using the OpenAI Responses API can override `npm` with `@ai-sdk/openai`; the sync script also accepts `OPENCODE_PROVIDER_NPM` and `OPENCODE_PROVIDER_API`.
 
-#### local
-**Type:** Object
-**Description:** Configuration for your local AI provider
+The synchronizer emits `limit` only when both `context` and `output` are known, because the current schema requires both fields.
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `npm` | string | Yes | Must be `@ai-sdk/openai-compatible` |
-| `name` | string | Yes | Display name for the provider |
-| `options` | object | Yes | Provider-specific options |
-| `models` | object | Yes | Available models configuration |
+## Environment variables
 
-#### options
-**Type:** Object
-**Description:** Connection options for the provider
+### Endpoint and provider
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `baseURL` | string | Yes | OpenAI-compatible API endpoint |
+| Variable | Default | Meaning |
+|---|---|---|
+| `LOCAL_API_BASE` | `http://127.0.0.1:1234/v1` | Compatible API base URL |
+| `OPENCODE_PROVIDER_ID` | auto-detected | Provider key written under `provider` |
+| `OPENCODE_PROVIDER_NAME` | auto-detected | Display name |
+| `OPENCODE_PROVIDER_NPM` | provider default | AI SDK package override |
+| `OPENCODE_PROVIDER_API` | unset | Provider API mode override |
+| `OPENCODE_MODELS_PATH` | `/models` | Model-list path appended to the base URL |
 
-#### models
-**Type:** Object
-**Description:** Model configurations indexed by model ID
+### Credentials
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | No | Display name (defaults to model ID) |
-| `tools` | boolean | No | Enable tool calling (default: true) |
+| Variable | Used for |
+|---|---|
+| `LOCAL_API_KEY` | Authenticated local servers |
+| `REMOTE_API_KEY` | LAN, VPN, and Tailscale servers |
+| `API_KEY` | Generic compatible endpoint fallback |
+| Provider-specific vars | `OPENAI_API_KEY`, `FIREWORKS_API_KEY`, `DEEPSEEK_API_KEY`, etc. |
 
-## Model Configuration Examples
+Credentials are used for the discovery request but persisted only as `{env:VARIABLE}` references. Prefer OpenCode's `/connect` flow for built-in cloud providers.
 
-### Standard LLM (with tool support)
-```json
-{
-  "llama-3.1-8b-instruct": {
-    "name": "Llama 3.1 8B Instruct",
-    "tools": true
-  }
-}
-```
+### Sync behavior
 
-### Vision Model
-```json
-{
-  "llava-7b": {
-    "name": "LLaVA 7B Vision",
-    "tools": false
-  }
-}
-```
+| Variable | Default | Meaning |
+|---|---|---|
+| `OPENCODE_SYNC_TIMEOUT_MS` | `10000` single / `2500` launch | Discovery HTTP timeout |
+| `OPENCODE_SYNC_PRUNE` | `1` | Remove models no longer returned; set `0` to retain them |
+| `OPENCODE_SYNC_DRY_RUN` | `0` | Discover and report without writing |
+| `OPENCODE_SYNC_VERBOSE` | `0` | Show launch-sync errors and summary |
+| `OPENCODE_SYNC_AFTER_EXIT` | `0` | Also refresh when the TUI exits |
 
-### Embedding Model (no tools)
-```json
-{
-  "nomic-embed-text": {
-    "name": "Nomic Embed Text",
-    "tools": false
-  }
-}
-```
+### Tailscale discovery
 
-## Multi-Provider Setup
+| Variable | Default | Meaning |
+|---|---|---|
+| `OPENCODE_TAILSCALE_DISCOVERY` | `0` | Set `1` to enable |
+| `OPENCODE_TAILSCALE_PORTS` | `1234,8000,8080,11434` | Comma-separated ports or ranges |
+| `OPENCODE_TAILSCALE_TIMEOUT_MS` | `150` | TCP probe timeout |
+| `OPENCODE_TAILSCALE_HTTP_TIMEOUT_MS` | `1000` | `/models` request timeout |
+| `OPENCODE_TAILSCALE_CONCURRENCY` | `16` | Maximum parallel TCP probes |
 
-You can configure multiple providers simultaneously:
+## Scripts
 
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "provider": {
-    "local-lmstudio": {
-      "npm": "@ai-sdk/openable-compatible",
-      "name": "LM Studio",
-      "options": {
-        "baseURL": "http://localhost:1234/v1"
-      },
-      "models": {}
-    },
-    "local-ollama": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "Ollama",
-      "options": {
-        "baseURL": "http://localhost:11434/v1"
-      },
-      "models": {}
-    },
-    "fireworks": {
-      "baseURL": "https://api.fireworks.ai/inference/v1",
-      "models": {
-        "deepseek-v3p2": {
-          "name": "DeepSeek V3.2"
-        }
-      }
-    }
-  }
-}
-```
+### `sync-provider.mjs`
 
-## Using Multiple Endpoints
-
-The launch wrapper refreshes every configured provider that has an `options.baseURL` with an OpenAI-compatible `/models` endpoint. That launch-time refresh updates the available models, their display names, and the inferred tool support for each configured checkpoint.
-
-If you want to manually repoint the legacy `local` provider, `sync-local-models.mjs` still supports that flow:
+Synchronizes one endpoint.
 
 ```bash
-# Sync LM Studio
-cd /path/to/opencode-local-setup
-LOCAL_API_BASE=http://localhost:1234/v1 node scripts/sync-local-models.mjs
-
-# Sync Ollama
-OPENCODE_CONFIG=~/.opencode-ollama.json LOCAL_API_BASE=http://localhost:11434/v1 node scripts/sync-local-models.mjs
-
-# Use different configs
-OPENCODE_CONFIG=~/.opencode-lmstudio.json opencode
-OPENCODE_CONFIG=~/.opencode-ollama.json opencode
+LOCAL_API_BASE=http://127.0.0.1:8080/v1 \
+OPENCODE_PROVIDER_ID=llamacpp \
+OPENCODE_PROVIDER_NAME="llama.cpp (local)" \
+node scripts/sync-provider.mjs
 ```
 
-## Provider Resolution
+The script validates the URL, fetches model metadata with a timeout, preserves unknown provider/model fields, migrates legacy `tools`, and atomically updates the config.
 
-When multiple models have the same ID, OpenCode uses the first matching provider. Use prefixes to disambiguate:
+### `sync-on-launch.mjs`
+
+Reads every custom provider containing `options.baseURL` and refreshes reachable compatible endpoints. Failures are isolated per provider so an offline server does not prevent OpenCode from starting.
 
 ```bash
-# In OpenCode
-/models list                    # Shows all models
-/models use local/llama-3.1     # Use local provider
-/models use fireworks/deepseek  # Use fireworks provider
+OPENCODE_SYNC_VERBOSE=1 node scripts/sync-on-launch.mjs
 ```
 
-## Advanced Options
+### `sync-all-providers.sh`
 
-### Custom Headers
-For providers requiring authentication:
+Checks common local ports and any explicit `OPENCODE_REMOTE_PROVIDERS`, then refreshes OpenCode's built-in model cache when the CLI is available.
 
-```json
-{
-  "provider": {
-    "custom": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "Custom Provider",
-      "options": {
-        "baseURL": "https://api.custom.com/v1",
-        "headers": {
-          "Authorization": "Bearer YOUR_API_KEY"
-        }
-      }
-    }
-  }
-}
-```
+Remote format:
 
-### Model-Specific Settings
-Some models may need specific configuration:
-
-```json
-{
-  "models": {
-    "qwen-long-writer": {
-      "name": "Qwen Long Writer",
-      "tools": true,
-      "contextWindow": 32000
-    }
-  }
-}
-```
-
-## Command-Line Usage
-
-### Basic Usage
 ```bash
-# Use specific local model
-opencode -m local/llama-3.1-8b-instruct
-
-# Use cloud provider model
-opencode -m fireworks/accounts/fireworks/models/deepseek-v3p2
+export OPENCODE_REMOTE_PROVIDERS='gpu-a|http://100.64.0.10:8000/v1|REMOTE_API_KEY,gpu-b|http://10.0.0.8:1234/v1|'
+./scripts/sync-all-providers.sh
 ```
 
-### Using Convenience Functions
+Each entry is `provider-id|base-url|optional-credential-env-name`.
+
+### `doctor.mjs`
+
+Checks:
+
+- OpenCode availability and version
+- active config path and schema
+- legacy model `tools` fields
+- incomplete `limit` objects
+- literal API keys and Authorization headers
+- provider base URLs
+
 ```bash
-# After installation
-oc-local                   # Uses local provider
-deepseek                   # Uses Fireworks DeepSeek
+node scripts/doctor.mjs
 ```
 
-### With Custom Endpoints
+## Shell helpers
+
+| Helper | Action |
+|---|---|
+| `sync-models [url]` | Refresh all configured endpoints or one URL |
+| `oc-provider <provider> [model] [prompt]` | Launch TUI or non-interactive run |
+| `oc-lmstudio` | Sync and use LM Studio |
+| `oc-ollama` | Sync and use Ollama |
+| `oc-vllm` | Sync and use vLLM |
+| `oc-llamacpp` | Sync and use llama.cpp |
+| `oc-doctor` | Run the compatibility audit |
+| `oc-upgrade` | Run `opencode upgrade` |
+
+## OpenCode-native commands
+
 ```bash
-# Temporarily override endpoint
-LOCAL_API_BASE=http://localhost:8000/v1 opencode
-
-# With custom config
-OPENCODE_CONFIG=/path/to/config.json opencode
+opencode                       # TUI
+opencode run "prompt"          # non-interactive
+opencode models [provider]     # list provider/model IDs
+opencode models --refresh      # refresh built-in provider cache
+opencode auth login            # authenticate a provider
+opencode auth list             # inspect authentication state
+opencode upgrade               # install the current release
 ```
-
-## API Endpoints
-
-### Standard OpenAI-Compatible
-- **GET** `/v1/models` - List available models
-- **POST** `/v1/chat/completions` - Chat completion
-- **POST** `/v1/embeddings` - Text embeddings
-
-### Provider-Specific
-- **LM Studio:** Full OpenAI compatibility at `http://localhost:1234/v1`
-- **Ollama:** OpenAI compatibility at `http://localhost:11434/v1`
-- **vLLM:** Full OpenAI compatibility, configurable port (default: 8000)

@@ -1,239 +1,165 @@
-# Troubleshooting Guide
+# Troubleshooting
 
-## Common Issues and Solutions
+Start with the automated checks:
 
-### 1. Sync Script Fails: "fetch failed" or "ECONNREFUSED"
-
-**Symptom:**
-```
-❌ Sync failed: fetch failed
-   Error: connect ECONNREFUSED 127.0.0.1:1234
-```
-
-**Cause:** Your AI server is not running or not accessible.
-
-**Solutions:**
-1. Start your AI server:
-   ```bash
-   # For LM Studio: Start the application and enable Local Server
-   # For Ollama: ollama serve
-   # For vLLM: python -m vllm.entrypoints.openai.api_server --model your-model
-   ```
-
-2. Verify endpoint:
-   ```bash
-   curl http://localhost:1234/v1/models
-   # Should return JSON with available models
-   ```
-
-3. Check firewall/network:
-   ```bash
-   # Ensure port is accessible
-   nc -zv localhost 1234
-   ```
-
-### 2. "No models found at http://.../v1/models"
-
-**Symptom:**
-```
-⚠️  No models found at http://localhost:1234/v1/models
-    Make sure your AI server is running and accessible
-```
-
-**Cause:** Server running but no models loaded.
-
-**Solutions:**
-1. **For LM Studio:** Load a model in the UI
-2. **For Ollama:** Pull a model first:
-   ```bash
-   ollama pull llama3.1:8b
-   ```
-3. **For vLLM:** Specify model on startup:
-   ```bash
-   vllm serve meta-llama/Meta-Llama-3.1-8B-Instruct
-   ```
-
-### 3. Sync Works But Models Don't Show in OpenCode
-
-**Cause:** OpenCode is using a different config file.
-
-**Solutions:**
-1. Check which config OpenCode is using:
-   ```bash
-   # Open using custom location
-   OPENCODE_CONFIG=~/.config/opencode/opencode.json opencode
-   ```
-
-2. Verify sync script updated the correct file:
-   ```bash
-   cat ~/.config/opencode/opencode.json | jq '.provider.local.models'
-   ```
-
-3. In OpenCode, check available models:
-   ```bash
-   # Use /models command within OpenCode
-   ```
-
-### 4. "Error reading config (might contain JSON comments?)"
-
-**Symptom:**
-```
-❌ Error reading config (might contain JSON comments?): Unexpected token
-```
-
-**Cause:** Config file contains comments (JSONC format) that strict JSON parser can't handle.
-
-**Solution:**
-1. Remove comments from `opencode.json`
-2. Or use a tool to strip comments before syncing:
-   ```bash
-   npm install -g strip-json-comments-cli
-   strip-json-comments ~/.config/opencode/opencode.json > ~/.config/opencode/opencode.json.clean
-   ```
-
-### 5. Bash Functions Not Working After Install
-
-**Symptom:**
 ```bash
-$ opencode
-bash: opencode: command not found
+oc-doctor
+OPENCODE_SYNC_VERBOSE=1 sync-models
 ```
 
-**Cause:** Bash functions not sourced or PATH not updated.
+## OpenCode is not found
 
-**Solutions:**
-1. Source your bashrc:
-   ```bash
-   source ~/.bashrc
-   ```
-
-2. Check if functions exist:
-   ```bash
-   type opencode
-   # Should show: opencode is a function
-   ```
-
-3. Verify OpenCode installation:
-   ```bash
-   which opencode
-   # Should show path like /home/user/.opencode/bin/opencode
-   ```
-
-### 6. "tools ??= true" Causing Issues
-
-**Symptom:** Model behaves strangely or tries to call non-existent tools.
-
-**Cause:** Your model doesn't support tool/function calling.
-
-**Solution:**
-1. Edit `opencode.json` and set `tools: false` for problematic models:
-   ```json
-   {
-     "provider": {
-       "local": {
-         "models": {
-           "my-small-model": {
-             "name": "my-small-model",
-             "tools": false
-           }
-         }
-       }
-     }
-   }
-   ```
-
-2. Or modify the sync script to detect model capabilities.
-
-### 7. "Cannot find module '/path/to/sync-local-models.mjs'"
-
-**Symptom:**
-```
-Error: Cannot find module '/home/user/.config/opencode/sync-local-models.mjs'
-```
-
-**Cause:** Script not installed or path incorrect.
-
-**Solution:**
-1. Re-run install script:
-   ```bash
-   ./scripts/install.sh
-   ```
-
-2. Or manually copy the scripts:
-   ```bash
-   cp scripts/providers.mjs ~/.config/opencode/
-   cp scripts/sync-core.mjs ~/.config/opencode/
-   cp scripts/sync-provider.mjs ~/.config/opencode/
-   cp scripts/sync-on-launch.mjs ~/.config/opencode/
-   cp scripts/sync-local-models.mjs ~/.config/opencode/
-   ```
-
-### 8. "Provider not found" or "Model not available"
-
-**Symptom:**
-```
-❌ Error: Provider "xyz" not found
-```
-
-**Cause:** Provider not synced yet or API key missing.
-
-**Solution:**
-1. Sync specific provider:
-   ```bash
-   export LOCAL_API_BASE="https://api.provider.com/v1"
-   export API_KEY="your-key"
-   node scripts/sync-provider.mjs
-   ```
-
-2. Or sync all providers:
-   ```bash
-   ./scripts/sync-all-providers.sh
-   ```
-
-3. Verify provider exists:
-   ```bash
-   cat ~/.config/opencode/opencode.json | jq '.provider | keys'
-   ```
-
-## Debugging Tips
-
-### Enable Verbose Output
-
-Run sync script with more output:
 ```bash
-node ~/.config/opencode/sync-local-models.mjs
+curl -fsSL https://opencode.ai/install | bash
+exec "$SHELL" -l
+opencode --version
 ```
 
-### Check API Directly
+The setup installer does not silently install or downgrade OpenCode.
 
-Test your API endpoint:
+## Shell helpers are not available
+
+Re-run the installer, then reload the active shell:
+
 ```bash
-curl -s http://localhost:1234/v1/models | jq
+./scripts/install.sh
+exec "$SHELL" -l
 ```
 
-### Verify Config
+The installer updates `~/.zshrc` for Zsh and `~/.bashrc` otherwise. It replaces only the block between the `opencode-local-setup` markers.
 
-Check final config:
+## Connection refused or timeout
+
+Confirm the server and model are loaded:
+
 ```bash
-cat ~/.config/opencode/opencode.json | jq '.provider.local'
+curl -fsS http://127.0.0.1:1234/v1/models | jq
 ```
 
-### Test with Different Endpoints
+Common endpoints:
 
-Override endpoint temporarily:
+| Server | URL |
+|---|---|
+| LM Studio | `http://127.0.0.1:1234/v1` |
+| Ollama | `http://127.0.0.1:11434/v1` |
+| vLLM | `http://127.0.0.1:8000/v1` |
+| llama.cpp | `http://127.0.0.1:8080/v1` |
+
+Increase the timeout only for genuinely slow links:
+
 ```bash
-LOCAL_API_BASE=http://localhost:11434/v1 node scripts/sync-local-models.mjs
+OPENCODE_SYNC_TIMEOUT_MS=10000 sync-models
 ```
 
-## Getting Help
+## Models sync but do not appear
 
-If you still have issues:
+Check the exact config path and provider IDs:
 
-1. Check the [API Reference](api-reference.md)
-2. Review OpenCode docs: https://opencode.ai/docs/
-3. Open an issue with:
-   - Command you're running
-   - Full error output
-   - `node --version`
-   - `curl $LOCAL_API_BASE/v1/models` output
-   - Contents of `opencode.json`
+```bash
+echo "${OPENCODE_CONFIG:-$HOME/.config/opencode/opencode.json}"
+opencode models
+opencode models --refresh
+```
+
+A project-level `opencode.json` can override global settings. A custom path set with `OPENCODE_CONFIG` is loaded in OpenCode's documented precedence order.
+
+## The config contains comments
+
+JSONC is supported. The synchronizer accepts line comments, block comments, and trailing commas. After writing, it normalizes the file to strict JSON. Invalid syntax still fails without changing the original file.
+
+## `tools` fails schema validation
+
+Current model metadata uses `tool_call`:
+
+```json
+{
+  "my-model": {
+    "name": "My Model",
+    "tool_call": true
+  }
+}
+```
+
+Run `sync-models` to migrate discovered models automatically. Agent-level tool policy is separate and belongs under current OpenCode `agent.permission` configuration.
+
+## `limit` fails schema validation
+
+A model limit must include both context and output:
+
+```json
+{
+  "limit": {
+    "context": 131072,
+    "output": 8192
+  }
+}
+```
+
+The synchronizer omits incomplete limits rather than writing invalid config.
+
+## Authentication fails
+
+For built-in providers:
+
+```bash
+opencode auth login
+opencode auth list
+```
+
+For a custom server, verify the env variable is available in the same shell:
+
+```bash
+export REMOTE_API_KEY='...'
+REMOTE_API_KEY="$REMOTE_API_KEY" \
+LOCAL_API_BASE=http://100.100.100.100:8000/v1 \
+OPENCODE_PROVIDER_ID=gpu-box \
+node scripts/sync-provider.mjs
+```
+
+Never place a raw API key in a committed config. `oc-doctor` reports literal keys and Authorization headers.
+
+## Tailscale peers are not discovered
+
+Discovery is opt-in:
+
+```bash
+export OPENCODE_TAILSCALE_DISCOVERY=1
+export OPENCODE_TAILSCALE_PORTS=1234,8000,8080,11434
+tailscale status
+OPENCODE_SYNC_VERBOSE=1 sync-models
+```
+
+Only online peers are considered. Explicitly configured remote providers are more predictable and do not require discovery.
+
+## Launch feels slow
+
+The wrapper only refreshes before launch by default. Reduce the custom endpoint timeout or disable an offline provider:
+
+```bash
+export OPENCODE_SYNC_TIMEOUT_MS=1000
+```
+
+Remove `OPENCODE_SYNC_AFTER_EXIT=1` and `OPENCODE_TAILSCALE_DISCOVERY=1` unless needed. The default discovery state is off.
+
+## Preserve a model missing from `/models`
+
+By default, stale entries are pruned. To merge without pruning:
+
+```bash
+OPENCODE_SYNC_PRUNE=0 sync-models
+```
+
+## Safe recovery
+
+The writer uses a temporary file and atomic rename, so a failed write should leave the original intact. Before major manual edits:
+
+```bash
+cp ~/.config/opencode/opencode.json ~/.config/opencode/opencode.json.backup
+```
+
+Then validate:
+
+```bash
+oc-doctor
+opencode models
+```

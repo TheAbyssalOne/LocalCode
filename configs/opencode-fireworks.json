@@ -1,32 +1,16 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "autoupdate": "notify",
+  "share": "manual",
   "provider": {
-    "fireworks": {
+    "fireworks-compatible": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "Fireworks AI",
+      "name": "Fireworks AI (custom endpoint)",
       "options": {
-        "baseURL": "https://api.fireworks.ai/inference/v1"
-      },
-      "models": {
-        "accounts/fireworks/models/deepseek-v3p2": {
-          "name": "DeepSeek V3.2"
-        }
-      }
-    },
-    "lmstudio": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "LM Studio",
-      "options": {
-        "baseURL": "http://localhost:1234/v1"
+        "baseURL": "https://api.fireworks.ai/inference/v1",
+        "apiKey": "{env:FIREWORKS_API_KEY}"
       },
       "models": {}
-    }
-  },
-  "agents": {
-    "coder": {
-      "provider": "fireworks",
-      "model": "accounts/fireworks/models/deepseek-v3p2",
-      "contextWindow": 160000
     }
   }
 }

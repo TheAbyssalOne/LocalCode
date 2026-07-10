@@ -1,0 +1,100 @@
+<svg width="1440" height="620" viewBox="0 0 1440 620" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">OpenCode Local Setup</title>
+  <desc id="desc">A polished terminal-inspired banner connecting OpenCode to local and remote AI model servers.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1440" y2="620" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#07111F"/>
+      <stop offset="0.55" stop-color="#0C1A2E"/>
+      <stop offset="1" stop-color="#10253A"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="300" y1="50" x2="1130" y2="590" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#65E8C4"/>
+      <stop offset="0.55" stop-color="#69A7FF"/>
+      <stop offset="1" stop-color="#B281FF"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="24" stdDeviation="30" flood-color="#000814" flood-opacity="0.48"/>
+    </filter>
+    <pattern id="grid" width="44" height="44" patternUnits="userSpaceOnUse">
+      <path d="M44 0H0V44" stroke="#8CB3D9" stroke-opacity="0.07"/>
+    </pattern>
+  </defs>
+
+  <rect width="1440" height="620" rx="34" fill="url(#bg)"/>
+  <rect width="1440" height="620" rx="34" fill="url(#grid)"/>
+  <circle cx="1235" cy="82" r="210" fill="#5A92FF" fill-opacity="0.12" filter="url(#glow)"/>
+  <circle cx="150" cy="568" r="230" fill="#54E0B8" fill-opacity="0.10" filter="url(#glow)"/>
+
+  <g opacity="0.9">
+    <path d="M960 134C1048 134 1064 206 1143 206" stroke="url(#accent)" stroke-width="3" stroke-linecap="round"/>
+    <path d="M960 310C1038 310 1069 310 1143 310" stroke="url(#accent)" stroke-width="3" stroke-linecap="round"/>
+    <path d="M960 486C1048 486 1064 414 1143 414" stroke="url(#accent)" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="1148" cy="206" r="8" fill="#69A7FF"/>
+    <circle cx="1148" cy="310" r="8" fill="#79C4FF"/>
+    <circle cx="1148" cy="414" r="8" fill="#B281FF"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="720" y="83" width="260" height="454" rx="26" fill="#0A1321" stroke="#7BE7CB" stroke-opacity="0.32"/>
+    <rect x="748" y="114" width="204" height="36" rx="10" fill="#101F32"/>
+    <circle cx="772" cy="132" r="5" fill="#FF7D79"/>
+    <circle cx="790" cy="132" r="5" fill="#FFD166"/>
+    <circle cx="808" cy="132" r="5" fill="#66E3B4"/>
+    <text x="838" y="138" fill="#A9BCD0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15">opencode</text>
+
+    <text x="755" y="196" fill="#67E7C1" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">$ sync-models</text>
+    <text x="755" y="233" fill="#DBE8F5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15">✓ lmstudio</text>
+    <text x="910" y="233" text-anchor="end" fill="#8DA4BA" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">4 models</text>
+    <text x="755" y="267" fill="#DBE8F5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15">✓ ollama</text>
+    <text x="910" y="267" text-anchor="end" fill="#8DA4BA" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">7 models</text>
+    <text x="755" y="301" fill="#DBE8F5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15">✓ vllm</text>
+    <text x="910" y="301" text-anchor="end" fill="#8DA4BA" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">2 models</text>
+
+    <rect x="748" y="335" width="204" height="1" fill="#7C96AE" fill-opacity="0.24"/>
+    <text x="755" y="379" fill="#69A7FF" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">$ opencode</text>
+    <text x="755" y="416" fill="#DBE8F5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15">local models ready</text>
+    <rect x="755" y="445" width="116" height="28" rx="8" fill="#152B3E"/>
+    <text x="813" y="464" text-anchor="middle" fill="#9AEBD5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13">secure env refs</text>
+  </g>
+
+  <g>
+    <rect x="1148" y="166" width="212" height="80" rx="18" fill="#0E1D2D" stroke="#69A7FF" stroke-opacity="0.34"/>
+    <text x="1172" y="198" fill="#C8D7E6" font-family="Inter, ui-sans-serif, system-ui" font-size="17" font-weight="650">LM Studio</text>
+    <text x="1172" y="222" fill="#7891A9" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13">127.0.0.1:1234</text>
+
+    <rect x="1148" y="270" width="212" height="80" rx="18" fill="#0E1D2D" stroke="#79C4FF" stroke-opacity="0.34"/>
+    <text x="1172" y="302" fill="#C8D7E6" font-family="Inter, ui-sans-serif, system-ui" font-size="17" font-weight="650">Ollama · vLLM</text>
+    <text x="1172" y="326" fill="#7891A9" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13">OpenAI-compatible</text>
+
+    <rect x="1148" y="374" width="212" height="80" rx="18" fill="#0E1D2D" stroke="#B281FF" stroke-opacity="0.34"/>
+    <text x="1172" y="406" fill="#C8D7E6" font-family="Inter, ui-sans-serif, system-ui" font-size="17" font-weight="650">LAN · Tailscale</text>
+    <text x="1172" y="430" fill="#7891A9" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13">remote GPU servers</text>
+  </g>
+
+  <g>
+    <rect x="76" y="76" width="128" height="34" rx="17" fill="#65E8C4" fill-opacity="0.12" stroke="#65E8C4" stroke-opacity="0.35"/>
+    <text x="140" y="99" text-anchor="middle" fill="#83EED2" font-family="Inter, ui-sans-serif, system-ui" font-size="14" font-weight="700" letter-spacing="1.4">LOCAL FIRST</text>
+    <text x="76" y="181" fill="#F2F7FC" font-family="Inter, ui-sans-serif, system-ui" font-size="64" font-weight="760" letter-spacing="-2">Your models.</text>
+    <text x="76" y="253" fill="url(#accent)" font-family="Inter, ui-sans-serif, system-ui" font-size="64" font-weight="760" letter-spacing="-2">One clean setup.</text>
+    <text x="76" y="317" fill="#A8BACD" font-family="Inter, ui-sans-serif, system-ui" font-size="23">Secure model discovery and launch-time sync for OpenCode.</text>
+
+    <g transform="translate(76 373)">
+      <rect width="188" height="50" rx="14" fill="#65E8C4"/>
+      <text x="94" y="32" text-anchor="middle" fill="#07131D" font-family="Inter, ui-sans-serif, system-ui" font-size="16" font-weight="750">Install in one command</text>
+      <rect x="204" width="174" height="50" rx="14" fill="#11243A" stroke="#6B91B6" stroke-opacity="0.4"/>
+      <text x="291" y="32" text-anchor="middle" fill="#C5D5E5" font-family="Inter, ui-sans-serif, system-ui" font-size="16" font-weight="650">macOS · Linux</text>
+    </g>
+
+    <g transform="translate(76 475)">
+      <circle cx="9" cy="9" r="9" fill="#65E8C4" fill-opacity="0.16"/>
+      <path d="M5 9.3L8 12.2L13.5 6.5" stroke="#65E8C4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="28" y="15" fill="#9DB0C4" font-family="Inter, ui-sans-serif, system-ui" font-size="16">Latest OpenCode schema</text>
+      <circle cx="241" cy="9" r="9" fill="#69A7FF" fill-opacity="0.16"/>
+      <path d="M237 9.3L240 12.2L245.5 6.5" stroke="#69A7FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="260" y="15" fill="#9DB0C4" font-family="Inter, ui-sans-serif, system-ui" font-size="16">Secrets stay out of config</text>
+    </g>
+  </g>
+</svg>

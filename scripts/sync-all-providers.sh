@@ -1,217 +1,93 @@
-#!/bin/bash
-
-# Sync all OpenCode providers automatically
-# Supports all providers defined in OpenCode including OAuth and API-key based providers
+#!/usr/bin/env bash
+set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SETUP_DIR="${OPENCODE_LOCAL_SETUP_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode/local-setup}"
+ENV_FILE="${OPENCODE_LOCAL_ENV:-$SETUP_DIR/.env.local}"
 
-# Source bashrc if it exists for environment variables
-if [ -f ~/.bashrc ]; then
-  source ~/.bashrc 2>/dev/null || true
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  set +a
 fi
 
-# ============================================
-# Provider Definitions
-# Format: "name|baseurl|env_key"
-# Use NO_KEY_NEEDED for local providers
-# ============================================
-
+# Built-in cloud providers belong to OpenCode. This list is intentionally limited
+# to custom local endpoints that expose an OpenAI-compatible /models route.
 PROVIDERS=(
-  # Cloud API Providers (API Key)
-  "openai|https://api.openai.com/v1|OPENAI_API_KEY"
-  "fireworks|https://api.fireworks.ai/inference/v1|FIREWORKS_API_KEY"
-  "deepseek|https://api.deepseek.com/v1|DEEPSEEK_API_KEY"
-  "xai|https://api.x.ai/v1|XAI_API_KEY"
-  "groq|https://api.groq.com/openai/v1|GROQ_API_KEY"
-  "together|https://api.together.xyz/v1|TOGETHER_API_KEY"
-  "mistral|https://api.mistral.ai/v1|MISTRAL_API_KEY"
-  "openrouter|https://openrouter.ai/api/v1|OPENROUTER_API_KEY"
-  "perplexity|https://api.perplexity.ai|PERPLEXITY_API_KEY"
-  
-  # Local Providers (No API Key)
-  "ollama|http://127.0.0.1:11434/v1|NO_KEY_NEEDED"
-  "lmstudio|http://127.0.0.1:1234/v1|NO_KEY_NEEDED"
-  "vllm|http://127.0.0.1:8000/v1|NO_KEY_NEEDED"
+  "ollama|Ollama (local)|http://127.0.0.1:11434/v1|"
+  "lmstudio|LM Studio (local)|http://127.0.0.1:1234/v1|"
+  "vllm|vLLM (local)|http://127.0.0.1:8000/v1|"
+  "llamacpp|llama.cpp (local)|http://127.0.0.1:8080/v1|"
 )
 
-# Remote/LAN Providers - Add your own remote llama.cpp, vLLM, LM Studio, etc. instances
-# Format: "provider_key|url|NO_KEY_NEEDED_or_env_var"
-# Uncomment and edit to match your setup:
-# REMOTE_PROVIDERS=(
-#   "tailscale-gpu-a-1234|http://100.100.100.100:1234/v1|NO_KEY_NEEDED"
-#   "tailscale-gpu-a-1235|http://100.100.100.100:1235/v1|NO_KEY_NEEDED"
-# )
-REMOTE_PROVIDERS=()
-# Load remote providers from env var if set (format: "key|url,key|url,...")
-if [ -n "$OPENCODE_REMOTE_PROVIDERS" ]; then
-  IFS=',' read -ra REMOTE_PROV_ARRAY <<< "$OPENCODE_REMOTE_PROVIDERS"
-  for rp in "${REMOTE_PROV_ARRAY[@]}"; do
-    REMOTE_PROVIDERS+=("$rp")
-  done
-fi
+synced=0
+skipped=0
+failed=0
 
-# OAuth providers that require special auth flow (via `opencode auth login`)
-OAUTH_PROVIDERS=(
-  "github-copilot|GitHub Copilot|opencode auth login"
-  "anthropic|Anthropic Claude|opencode auth login"
-  "gitlab|GitLab Duo|opencode auth login"
-)
+sync_one() {
+  local provider_id="$1"
+  local display_name="$2"
+  local base_url="$3"
+  local credential_env="${4:-}"
+  local credential_value=""
+  local output status count
 
-echo "🚀 OpenCode Provider Auto-Detection & Sync"
-echo "==========================================="
-echo ""
+  if [ -n "$credential_env" ]; then
+    credential_value="${!credential_env:-}"
+    if [ -z "$credential_value" ]; then
+      printf '· %-18s skipped (%s is not set)\n' "$provider_id" "$credential_env"
+      skipped=$((skipped + 1))
+      return
+    fi
+  fi
 
-# Count available providers
-available_count=0
-synced_count=0
-failed_count=0
-skipped_count=0
+  output="$(
+    LOCAL_API_BASE="$base_url" \
+    OPENCODE_PROVIDER_ID="$provider_id" \
+    OPENCODE_PROVIDER_NAME="$display_name" \
+    OPENCODE_SYNC_TIMEOUT_MS="${OPENCODE_SYNC_TIMEOUT_MS:-3000}" \
+    node "$SCRIPT_DIR/sync-provider.mjs" 2>&1
+  )"
+  status=$?
 
-# Check for OAuth providers first
-echo "📋 Checking OAuth Providers..."
-echo "   These providers require 'opencode auth login' for authentication:"
-echo ""
+  if [ "$status" -eq 0 ]; then
+    count="$(printf '%s\n' "$output" | sed -n 's/.*Found \([0-9][0-9]*\) models.*/\1/p' | tail -n 1)"
+    printf '✓ %-18s %s models\n' "$provider_id" "${count:-0}"
+    synced=$((synced + 1))
+  else
+    printf '· %-18s unavailable\n' "$provider_id"
+    if [ "${OPENCODE_SYNC_VERBOSE:-0}" = "1" ]; then
+      printf '  %s\n' "$(printf '%s' "$output" | tail -n 1)"
+    fi
+    skipped=$((skipped + 1))
+  fi
+}
 
-for oauth_provider in "${OAUTH_PROVIDERS[@]}"; do
-  IFS='|' read -r name display_name auth_cmd <<< "$oauth_provider"
-  echo "   • $display_name ($name)"
-  echo "     Auth: $auth_cmd"
-done
-
-echo ""
-echo "📋 Syncing API-Compatible Providers..."
-echo "==========================================="
-
+echo "Refreshing custom OpenCode model catalogs"
 for provider in "${PROVIDERS[@]}"; do
-  IFS='|' read -r name baseurl env_key <<< "$provider"
-  
-  echo ""
-  echo "🔍 Provider: $name"
-  echo "   URL: $baseurl"
-  
-  # Check if API key is needed and available
-  if [[ "$env_key" == "NO_KEY_NEEDED" ]]; then
-    api_key=""
-    echo "   Key: Not required (local)"
-    
-    # For local providers, check if server is reachable
-    if ! curl -s --connect-timeout 2 "$baseurl/models" >/dev/null 2>&1; then
-      echo "   ⏭️  Skipped (server not running)"
-      ((skipped_count++))
-      continue
-    fi
-  else
-    api_key="${!env_key}"
-    if [[ -z "$api_key" ]]; then
-      echo "   Key: ❌ Not configured ($env_key)"
-      echo "   ⏭️  Skipped (no API key)"
-      ((skipped_count++))
-      continue
-    fi
-    echo "   Key: ✅ Found (${#api_key} chars)"
-  fi
-  
-  ((available_count++))
-  
-  # Run sync
-  if [[ -n "$api_key" ]]; then
-    output=$(LOCAL_API_BASE="$baseurl" node "$SCRIPT_DIR/sync-provider.mjs" 2>&1)
-  else
-    output=$(LOCAL_API_BASE="$baseurl" node "$SCRIPT_DIR/sync-provider.mjs" 2>&1)
-  fi
-  
-  exit_code=$?
-  
-  if [[ $exit_code -eq 0 ]] && [[ $output != *"❌"* ]]; then
-    model_count=$(echo "$output" | grep -oP "Found \K[0-9]+" | head -1 || echo "0")
-    echo "   ✅ Synced: $model_count models"
-    ((synced_count++))
-  else
-    error_msg=$(echo "$output" | grep "❌" | head -1 || echo "Unknown error")
-    echo "   ❌ Failed: $error_msg"
-    ((failed_count++))
-  fi
+  IFS='|' read -r provider_id display_name base_url credential_env <<< "$provider"
+  sync_one "$provider_id" "$display_name" "$base_url" "$credential_env"
 done
 
-# Sync Remote/LAN Providers
-if [ ${#REMOTE_PROVIDERS[@]} -gt 0 ]; then
-  echo ""
-  echo "📋 Syncing Remote/LAN Providers..."
-  echo "==========================================="
-
-  for provider in "${REMOTE_PROVIDERS[@]}"; do
-    IFS='|' read -r name baseurl env_key <<< "$provider"
-    
-    echo ""
-    echo "🔍 Provider: $name"
-    echo "   URL: $baseurl"
-    
-    if [[ "$env_key" == "NO_KEY_NEEDED" ]]; then
-      api_key=""
-      echo "   Key: Not required (remote/LAN)"
-      if ! curl -s --connect-timeout 3 "$baseurl/models" >/dev/null 2>&1; then
-        echo "   ⏭️  Skipped (server not reachable)"
-        ((skipped_count++))
-        continue
-      fi
-    else
-      api_key="${!env_key}"
-      if [[ -z "$api_key" ]]; then
-        echo "   Key: ❌ Not configured ($env_key)"
-        ((skipped_count++))
-        continue
-      fi
-      echo "   Key: ✅ Found (${#api_key} chars)"
+if [ -n "${OPENCODE_REMOTE_PROVIDERS:-}" ]; then
+  IFS=',' read -ra remotes <<< "$OPENCODE_REMOTE_PROVIDERS"
+  for remote in "${remotes[@]}"; do
+    IFS='|' read -r provider_id base_url credential_env <<< "$remote"
+    if [ -z "$provider_id" ] || [ -z "$base_url" ]; then
+      printf '✗ invalid OPENCODE_REMOTE_PROVIDERS entry: %s\n' "$remote" >&2
+      failed=$((failed + 1))
+      continue
     fi
-
-    ((available_count++))
-    
-    output=$(LOCAL_API_BASE="$baseurl" OPENCODE_PROVIDER_ID="$name" node "$SCRIPT_DIR/sync-provider.mjs" 2>&1)
-    exit_code=$?
-    
-    if [[ $exit_code -eq 0 ]] && [[ $output != *"❌"* ]]; then
-      model_count=$(echo "$output" | grep -oP "Found \K[0-9]+" | head -1 || echo "0")
-      echo "   ✅ Synced: $model_count models"
-      ((synced_count++))
-    else
-      error_msg=$(echo "$output" | grep "❌" | head -1 || echo "Unknown error")
-      echo "   ❌ Failed: $error_msg"
-      ((failed_count++))
-    fi
+    sync_one "$provider_id" "$provider_id" "$base_url" "${credential_env:-}"
   done
 fi
 
-echo ""
-echo "==========================================="
-echo "📊 Summary"
-echo "==========================================="
-echo "   ✅ Synced:  $synced_count providers"
-echo "   ⏭️  Skipped: $skipped_count providers"
-echo "   ❌ Failed:  $failed_count providers"
-echo ""
-
-# Show final configuration
-CONFIG_FILE="${OPENCODE_CONFIG:-$HOME/.config/opencode/opencode.json}"
-if [ -f "$CONFIG_FILE" ]; then
-  echo "📄 Active Providers:"
-  if command -v jq &> /dev/null; then
-    jq -r '.provider | keys[]' "$CONFIG_FILE" 2>/dev/null | sed 's/^/   • /'
-  else
-    echo "   (install jq to see provider list)"
-  fi
-else
-  echo "   ⚠️  No config file found at $CONFIG_FILE"
+if command -v opencode >/dev/null 2>&1; then
+  command opencode models --refresh >/dev/null 2>&1 || true
 fi
 
-echo ""
-echo "🎉 Sync complete!"
-echo ""
-echo "📖 Usage:"
-echo "   Try: opencode -m <provider>/<model>"
-echo "   Or:  oc-local <prompt>  (uses local provider)"
-echo "   opencode auth login                   # Authenticate OAuth providers"
-echo "   opencode auth list                    # View authenticated providers"
-echo ""
-echo "🔐 OAuth Providers (GitHub Copilot, Claude, GitLab):"
-echo "   Run: opencode auth login"
-echo ""
+echo
+echo "Synced $synced · unavailable/skipped $skipped · failed $failed"
+echo "Use '/connect' for built-in provider credentials and 'opencode models' to inspect model IDs."
+[ "$failed" -eq 0 ]

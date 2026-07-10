@@ -7,231 +7,105 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
-import { getAutoDisplayName } from "../scripts/sync-core.mjs";
+import {
+  getAutoDisplayName,
+  parseJsonConfig,
+  resolveCredentialReference,
+  resolveModelLimit,
+  syncProviderModels,
+} from "../scripts/sync-core.mjs";
+import { detectProviderFromUrl } from "../scripts/providers.mjs";
 
-const repoDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const execFileAsync = promisify(execFile);
+const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const exec = promisify(execFile);
 
-async function startModelServer(modelsByPath) {
-  const server = http.createServer((request, response) => {
-    const models = modelsByPath[request.url];
-    if (!models) {
-      response.writeHead(404, { "content-type": "application/json" });
-      response.end(JSON.stringify({ error: "not found" }));
+async function withServer(routes, token, run) {
+  const server = http.createServer((req, res) => {
+    if (token && req.headers.authorization !== `Bearer ${token}`) {
+      res.writeHead(401).end();
       return;
     }
-
-    response.writeHead(200, { "content-type": "application/json" });
-    response.end(JSON.stringify({ data: models }));
+    const data = routes[req.url];
+    res.writeHead(data ? 200 : 404, { "content-type": "application/json" });
+    res.end(JSON.stringify(data ? { data } : { error: "not found" }));
   });
-
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const { port } = server.address();
-
-  return {
-    close: () => new Promise((resolve, reject) => {
-      server.closeAllConnections?.();
-      server.close((error) => error ? reject(error) : resolve());
-    }),
-    urlFor: (requestPath = "/v1") => `http://127.0.0.1:${port}${requestPath}`,
-  };
+  try {
+    await run(`http://127.0.0.1:${server.address().port}`);
+  } finally {
+    server.closeAllConnections?.();
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
 }
 
-test("sync-provider refreshes model names and removes stale models", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "sync-provider-"));
-  const configPath = path.join(tempDir, "opencode.json");
-  const server = await startModelServer({
-    "/v1/models": [
-      { id: "latest-chat", name: "Latest Chat", function_calling: true },
-      { id: "embed-small", name: "Embed Small", function_calling: false },
-    ],
-  });
+async function run(script, env) {
+  return exec("node", [script], { cwd: root, env: { ...process.env, ...env }, encoding: "utf8" });
+}
 
-  try {
-    await fs.writeFile(configPath, JSON.stringify({
-      $schema: "https://opencode.ai/config.json",
-      provider: {
-        local: {
-          npm: "@ai-sdk/openai-compatible",
-          name: "Local",
-          options: {
-            baseURL: server.urlFor("/v1"),
-          },
-          models: {
-            "latest-chat": {
-              name: "Old Name",
-              tools: false,
-            },
-            "stale-model": {
-              name: "Stale",
-              tools: true,
-            },
-          },
-        },
-      },
-    }, null, 2));
-
-    await execFileAsync("node", ["scripts/sync-provider.mjs"], {
-      cwd: repoDir,
-      env: {
-        ...process.env,
-        OPENCODE_CONFIG: configPath,
-        LOCAL_API_BASE: server.urlFor("/v1"),
-        OPENCODE_PROVIDER_ID: "local",
-        OPENCODE_PROVIDER_NAME: "Local",
-      },
-      encoding: "utf8",
-    });
-
-    const config = JSON.parse(await fs.readFile(configPath, "utf8"));
-    assert.deepEqual(config.provider.local.models, {
-      "latest-chat": {
-        name: "Latest Chat",
-        tools: true,
-      },
-      "embed-small": {
-        name: "Embed Small",
-        tools: false,
-      },
-    });
-  } finally {
-    await server.close();
-    await fs.rm(tempDir, { recursive: true, force: true });
-  }
+test("JSONC supports comments and trailing commas", () => {
+  assert.deepEqual(parseJsonConfig(`{/* block */"provider":{"local":{},},// line\n}`), { provider: { local: {} } });
 });
 
-test("sync-on-launch refreshes every configured checkpoint without renaming providers", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "launch-sync-"));
-  const configPath = path.join(tempDir, "opencode.json");
-  const serverA = await startModelServer({
-    "/a/models": [
-      { id: "checkpoint-a", name: "Checkpoint A Latest", function_calling: true },
-    ],
-  });
-  const serverB = await startModelServer({
-    "/b/models": [
-      { id: "checkpoint-b", name: "Checkpoint B Latest", function_calling: false },
-    ],
-  });
-
-  try {
-    await fs.writeFile(configPath, JSON.stringify({
-      $schema: "https://opencode.ai/config.json",
-      provider: {
-        "checkpoint-alpha": {
-          npm: "@ai-sdk/openai-compatible",
-          name: "Alpha Checkpoint",
-          options: {
-            baseURL: serverA.urlFor("/a"),
-          },
-          models: {
-            "checkpoint-a": {
-              name: "Outdated Alpha",
-              tools: false,
-            },
-          },
-        },
-        "checkpoint-beta": {
-          npm: "@ai-sdk/openai-compatible",
-          name: "Beta Checkpoint",
-          options: {
-            baseURL: serverB.urlFor("/b"),
-          },
-          models: {},
-        },
-      },
-    }, null, 2));
-
-    await execFileAsync("node", ["scripts/sync-on-launch.mjs"], {
-      cwd: repoDir,
-      env: {
-        ...process.env,
-        OPENCODE_CONFIG: configPath,
-        OPENCODE_TAILSCALE_DISCOVERY: "0",
-      },
-      encoding: "utf8",
-    });
-
-    const config = JSON.parse(await fs.readFile(configPath, "utf8"));
-    assert.equal(config.provider["checkpoint-alpha"].name, "Alpha Checkpoint");
-    assert.equal(config.provider["checkpoint-beta"].name, "Beta Checkpoint");
-    assert.deepEqual(config.provider["checkpoint-alpha"].models, {
-      "checkpoint-a": {
-        name: "Checkpoint A Latest",
-        tools: true,
-      },
-    });
-    assert.deepEqual(config.provider["checkpoint-beta"].models, {
-      "checkpoint-b": {
-        name: "Checkpoint B Latest",
-        tools: false,
-      },
-    });
-  } finally {
-    await Promise.all([serverA.close(), serverB.close()]);
-    await fs.rm(tempDir, { recursive: true, force: true });
-  }
+test("model limits require both context and output", () => {
+  assert.deepEqual(resolveModelLimit({ context_length: 131072, max_output_tokens: 8192 }), { context: 131072, output: 8192 });
+  assert.equal(resolveModelLimit({ context_length: 131072 }), undefined);
 });
 
-test("getAutoDisplayName prefixes Tailscale endpoints", () => {
-  assert.equal(
-    getAutoDisplayName("http://100.100.100.100:1234/v1", "Remote OpenAI-Compatible"),
-    "Tailscale - 100.100.100.100:1234",
-  );
+test("model sync migrates tools, prunes stale entries, and preserves metadata", () => {
+  const cfg = { provider: { local: { options: { baseURL: "http://old/v1" }, models: {
+    chat: { name: "Old", tools: false, custom: true }, stale: { name: "Stale" },
+  } } } };
+  const result = syncProviderModels({
+    cfg, providerKey: "local", baseURL: "http://127.0.0.1:1234/v1",
+    models: [{ id: "chat", name: "Chat", function_calling: true, context_length: 32768, max_output_tokens: 4096 }],
+    detectedProvider: detectProviderFromUrl("http://127.0.0.1:1234/v1"), displayName: "LM Studio",
+  });
+  assert.equal(result.removedCount, 1);
+  assert.deepEqual(cfg.provider.local.models.chat, {
+    name: "Chat", custom: true, tool_call: true, limit: { context: 32768, output: 4096 },
+  });
 });
 
-test("sync-on-launch auto-discovers Tailscale peers in the configured port range", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "launch-sync-tailscale-"));
-  const configPath = path.join(tempDir, "opencode.json");
-  const server = await startModelServer({
-    "/v1/models": [
-      { id: "qwen-remote", name: "Qwen Remote", function_calling: true },
-    ],
-  });
+test("credentials remain environment references", () => {
+  process.env.LOCAL_API_KEY = "super-secret";
+  const provider = detectProviderFromUrl("http://127.0.0.1:1234/v1");
+  assert.equal(resolveCredentialReference({ detectedProvider: provider, providerConfig: {} }), "{env:LOCAL_API_KEY}");
+  delete process.env.LOCAL_API_KEY;
+});
 
+test("Tailscale endpoints get readable names", () => {
+  assert.equal(getAutoDisplayName("http://100.100.100.100:8000/v1"), "Tailscale · 100.100.100.100:8000");
+});
+
+test("launch sync refreshes multiple configured providers securely", async () => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-sync-"));
+  const configPath = path.join(temp, "opencode.json");
+  const secret = "never-persist-this";
   try {
-    await fs.writeFile(configPath, JSON.stringify({
-      $schema: "https://opencode.ai/config.json",
-      provider: {},
-    }, null, 2));
-
-    const tailscaleStatus = {
-      Peer: {
-        testPeer: {
-          HostName: "gpu-box",
-          Online: true,
-          TailscaleIPs: ["127.0.0.1"],
+    await withServer({
+      "/a/models": [{ id: "alpha", name: "Alpha", function_calling: true }],
+      "/b/models": [{ id: "beta", name: "Beta", function_calling: false }],
+    }, secret, async (origin) => {
+      await fs.writeFile(configPath, JSON.stringify({
+        $schema: "https://opencode.ai/config.json",
+        provider: {
+          alpha: { npm: "@ai-sdk/openai-compatible", options: { baseURL: `${origin}/a`, apiKey: "{env:LOCAL_API_KEY}" }, models: {} },
+          beta: { npm: "@ai-sdk/openai-compatible", options: { baseURL: `${origin}/b`, headers: { Authorization: `Bearer ${secret}`, "X-Keep": "yes" } }, models: {} },
         },
-      },
-    };
-
-    await execFileAsync("node", ["scripts/sync-on-launch.mjs"], {
-      cwd: repoDir,
-      env: {
-        ...process.env,
-        OPENCODE_CONFIG: configPath,
-        OPENCODE_TAILSCALE_STATUS_JSON: JSON.stringify(tailscaleStatus),
-        OPENCODE_TAILSCALE_PORTS: String(new URL(server.urlFor("/v1")).port),
-        OPENCODE_TAILSCALE_TIMEOUT_MS: "50",
-        OPENCODE_TAILSCALE_HTTP_TIMEOUT_MS: "500",
-      },
-      encoding: "utf8",
-    });
-
-    const discoveredPort = String(new URL(server.urlFor("/v1")).port);
-    const config = JSON.parse(await fs.readFile(configPath, "utf8"));
-    const providerKey = `tailscale-gpu-box-${discoveredPort}`;
-
-    assert.equal(config.provider[providerKey].name, `Tailscale - gpu-box:${discoveredPort}`);
-    assert.equal(config.provider[providerKey].options.baseURL, `http://127.0.0.1:${discoveredPort}/v1`);
-    assert.deepEqual(config.provider[providerKey].models, {
-      "qwen-remote": {
-        name: "Qwen Remote",
-        tools: true,
-      },
+      }));
+      await run("scripts/sync-on-launch.mjs", {
+        OPENCODE_CONFIG: configPath, LOCAL_API_KEY: secret, OPENCODE_TAILSCALE_DISCOVERY: "0",
+      });
+      const raw = await fs.readFile(configPath, "utf8");
+      const cfg = JSON.parse(raw);
+      assert.equal(raw.includes(secret), false);
+      assert.deepEqual(cfg.provider.alpha.models.alpha, { name: "Alpha", tool_call: true });
+      assert.deepEqual(cfg.provider.beta.models.beta, { name: "Beta", tool_call: false });
+      assert.equal(cfg.provider.beta.options.apiKey, "{env:LOCAL_API_KEY}");
+      assert.deepEqual(cfg.provider.beta.options.headers, { "X-Keep": "yes" });
+      assert.equal((await fs.stat(configPath)).mode & 0o777, 0o600);
     });
   } finally {
-    await server.close();
-    await fs.rm(tempDir, { recursive: true, force: true });
+    await fs.rm(temp, { recursive: true, force: true });
   }
 });

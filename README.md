@@ -1,416 +1,228 @@
-# OpenCode Local AI Provider Setup
+<div align="center">
+  <img src="docs/assets/hero.svg" alt="OpenCode Local Setup — your models, one clean setup" width="100%" />
 
-This repository provides a complete solution for integrating local and cloud AI providers with [OpenCode](https://opencode.ai/), the terminal-based AI coding agent. Automatically sync models from **any OpenAI-compatible API endpoint** including LM Studio, vLLM, Ollama, OpenAI, Fireworks AI, xAI, DeepSeek, and more.
+  <br />
 
-## 🚀 Features
+  [![CI](https://github.com/groxaxo/opencode-local-setup/actions/workflows/ci.yml/badge.svg)](https://github.com/groxaxo/opencode-local-setup/actions/workflows/ci.yml)
+  [![OpenCode schema](https://img.shields.io/badge/OpenCode-current%20schema-65e8c4)](https://opencode.ai/config.json)
+  [![Node 18+](https://img.shields.io/badge/Node-18%2B-69a7ff)](https://nodejs.org/)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-b281ff.svg)](LICENSE)
 
-- **🔌 Universal Provider Support**: Works with **any OpenAI-compatible API endpoint**
-- **🔄 Automatic Model Discovery**: Syncs models from local/cloud servers automatically
-- **⚡ Auto-Sync on Launch & Exit**: Every configured checkpoint refreshes before OpenCode starts and after it closes
-- **📦 Multi-Provider Management**: Configure and use multiple providers simultaneously
-- **🎯 Smart Model Detection**: Auto-detects tool capabilities and model types
-- **🔐 OAuth Support**: GitHub Copilot, Claude Max, GitLab Duo authentication
-- **🛠️ Bash Shortcuts**: Convenient shell functions for common providers
+  **A secure, low-friction bridge between OpenCode and your local, LAN, or OpenAI-compatible model servers.**
 
-## 📊 Supported Providers
+  [Quick start](#quick-start) · [How it works](#how-it-works) · [Configuration](#configuration) · [Troubleshooting](docs/troubleshooting.md)
+</div>
 
-### Cloud Providers (API Key)
+## Why this exists
 
-| Provider | Endpoint | Environment Variable | Status |
-|----------|----------|---------------------|--------|
-| **OpenAI** | `https://api.openai.com/v1` | `OPENAI_API_KEY` | ✅ |
-| **Fireworks AI** | `https://api.fireworks.ai/inference/v1` | `FIREWORKS_API_KEY` | ✅ |
-| **xAI (Grok)** | `https://api.x.ai/v1` | `XAI_API_KEY` | ✅ |
-| **DeepSeek** | `https://api.deepseek.com/v1` | `DEEPSEEK_API_KEY` | ✅ |
-| **Groq** | `https://api.groq.com/openai/v1` | `GROQ_API_KEY` | ✅ |
-| **Together AI** | `https://api.together.xyz/v1` | `TOGETHER_API_KEY` | ✅ |
-| **Mistral AI** | `https://api.mistral.ai/v1` | `MISTRAL_API_KEY` | ✅ |
-| **OpenRouter** | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` | ✅ |
-| **Perplexity** | `https://api.perplexity.ai` | `PERPLEXITY_API_KEY` | ✅ |
-| **Google (Gemini)** | `https://generativelanguage.googleapis.com` | `GOOGLE_API_KEY` | ✅ |
-| **Cohere** | `https://api.cohere.ai/v1` | `COHERE_API_KEY` | ✅ |
-| **Vercel AI** | `https://api.vercel.ai/v1` | `VERCEL_API_KEY` | ✅ |
-| **Azure OpenAI** | `https://{resource}.openai.azure.com` | `AZURE_OPENAI_API_KEY` | ✅ |
-| **Amazon Bedrock** | AWS Region-based | AWS credentials | ✅ |
-| **Cloudflare** | Cloudflare Workers AI | `CLOUDFLARE_API_TOKEN` | ✅ |
+OpenCode already has excellent built-in providers. Local inference is different: models are loaded, unloaded, renamed, and moved between machines. This project keeps the custom provider section of `opencode.json` synchronized with the live `/models` endpoints you actually run—without replacing OpenCode's native authentication flow or writing API keys into your config.
 
-### OAuth Providers (Requires `opencode auth login`)
+| What you get | What it means |
+|---|---|
+| **Live model discovery** | LM Studio, Ollama, vLLM, llama.cpp, and compatible servers appear with their current model IDs. |
+| **Current OpenCode config** | Generates `provider`, `options.baseURL`, `tool_call`, and valid `limit` metadata using the active schema. |
+| **Safe credentials** | Uses `{env:VARIABLE}` references and never copies discovery tokens into generated config. |
+| **Fast launches** | Refreshes configured endpoints before launch with short timeouts; post-exit sync and network discovery are opt-in. |
+| **macOS + Linux** | Installs cleanly for Bash or Zsh without GNU-only `sed`/`grep` assumptions. |
+| **Non-destructive updates** | Preserves unrelated OpenCode settings and writes config atomically with owner-only permissions. |
 
-| Provider | Auth Method | Command |
-|----------|-------------|---------|
-| **GitHub Copilot** | OAuth Device Flow | `opencode auth login` |
-| **Anthropic (Claude Max)** | OAuth | `opencode auth login` |
-| **GitLab Duo** | OAuth | `opencode auth login` |
+## Quick start
 
-### Local Providers (No API Key)
-
-| Provider | Endpoint | Models | Status |
-|----------|----------|--------|--------|
-| **LM Studio** | `http://localhost:1234/v1` | Any loaded GGUF | ✅ |
-| **vLLM** | `http://localhost:8000/v1` | Any served model | ✅ |
-| **Ollama** | `http://localhost:11434/v1` | Local models | ✅ |
-
-### Remote/LAN Providers (No API Key or Optional)
-
-| Provider | Endpoint | Models | Status |
-|----------|----------|--------|--------|
-| **Remote llama.cpp** | `http://<host>:<port>/v1` | Any served GGUF | ✅ |
-| **Remote LM Studio** | `http://<host>:1234/v1` | Any loaded GGUF | ✅ |
-| **Remote vLLM** | `http://<host>:8000/v1` | Any served model | ✅ |
-| **Tailscale/Wireguard** | `http://100.x.x.x:<port>/v1` | Any remote model | ✅ |
-
-## ⚡ Quick Start
+### 1. Install OpenCode
 
 ```bash
-# Clone and install
+curl -fsSL https://opencode.ai/install | bash
+```
+
+### 2. Install this setup
+
+```bash
 git clone https://github.com/groxaxo/opencode-local-setup.git
 cd opencode-local-setup
 ./scripts/install.sh
+```
 
-# Sync all your providers (reads API keys from environment)
-./scripts/sync-all-providers.sh
+Restart your shell, then start your local server and run:
 
-# Launch OpenCode with auto-sync
+```bash
 opencode
 ```
 
-### Alternative: Manual Setup
+The wrapper quietly refreshes the model catalog before opening OpenCode. Inside the TUI, use `/models` to choose a model and `/connect` for OpenCode-managed cloud credentials.
+
+> [!TIP]
+> The default endpoint is LM Studio at `http://127.0.0.1:1234/v1`. Change it in `~/.config/opencode/local-setup/.env.local`.
+
+## Local server shortcuts
+
+These helpers synchronize the endpoint and then launch the selected provider:
 
 ```bash
-# Install
-./scripts/install.sh
+oc-lmstudio                     # http://127.0.0.1:1234/v1
+oc-ollama                       # http://127.0.0.1:11434/v1
+oc-vllm                         # http://127.0.0.1:8000/v1
+oc-llamacpp                     # http://127.0.0.1:8080/v1
 
-# Sync a single provider
-export LOCAL_API_BASE="https://api.openai.com/v1"
-export OPENAI_API_KEY="your-key-here"
+oc-lmstudio "Review this repo" # non-interactive: opencode run --model ...
+```
+
+They are intentionally prefixed with `oc-`, so they never shadow the real `ollama`, `vllm`, or other server executables.
+
+## How it works
+
+```mermaid
+flowchart LR
+  A[Local / LAN model server] -->|GET /v1/models| B[Secure synchronizer]
+  B -->|preserve + migrate| C[opencode.json / JSONC]
+  C --> D[OpenCode]
+  E[Environment variables] -->|{env:NAME}| C
+  F[Tailscale discovery] -. opt-in .-> B
+```
+
+1. Reads the active OpenCode config from `OPENCODE_CONFIG` or `~/.config/opencode/opencode.json`.
+2. Accepts both JSON and JSONC, including trailing commas.
+3. Queries each explicitly configured OpenAI-compatible `/models` endpoint.
+4. Refreshes display names, `tool_call`, reasoning capability, and token limits when the server reports them.
+5. Migrates legacy `tools` model metadata and removes stale models by default.
+6. Writes the result atomically with `0600` permissions.
+
+## Configuration
+
+### Main environment file
+
+```bash
+$EDITOR ~/.config/opencode/local-setup/.env.local
+```
+
+```bash
+LOCAL_API_BASE=http://127.0.0.1:1234/v1
+
+# Optional authentication for local or remote compatible servers
+# LOCAL_API_KEY=...
+# REMOTE_API_KEY=...
+```
+
+### Synchronize one endpoint
+
+```bash
+LOCAL_API_BASE=http://127.0.0.1:8000/v1 \
+OPENCODE_PROVIDER_ID=vllm \
+OPENCODE_PROVIDER_NAME="vLLM (local)" \
 node scripts/sync-provider.mjs
-
-# Use it
-opencode -m openai/gpt-4o
 ```
 
-## 🔧 Configuration
-
-### Environment Variables
-
-Set these in your `~/.bashrc` or export them before running sync:
+### Synchronize configured endpoints
 
 ```bash
-# Your OpenAI-compatible API endpoint
-export LOCAL_API_BASE="http://localhost:1234/v1"  # Default: LM Studio
-
-# Provider API keys (set the ones you need)
-export OPENAI_API_KEY="sk-..."           # For OpenAI
-export FIREWORKS_API_KEY="fw_..."         # For Fireworks AI  
-export XAI_API_KEY="xai-..."              # For xAI/Grok
-export DEEPSEEK_API_KEY="sk-..."          # For DeepSeek
-export GROQ_API_KEY="gsk_..."             # For Groq
-export TOGETHER_API_KEY="..."             # For Together AI
-export MISTRAL_API_KEY="..."              # For Mistral AI
-export OPENROUTER_API_KEY="sk-or-..."     # For OpenRouter
-export PERPLEXITY_API_KEY="pplx-..."      # For Perplexity
-export GOOGLE_API_KEY="..."               # For Google/Gemini
-export COHERE_API_KEY="..."               # For Cohere
-export ANTHROPIC_API_KEY="sk-ant-..."     # For Anthropic (API key method)
-
-# Config path (optional)
-export OPENCODE_CONFIG="/path/to/config.json"
-
-# Custom config directory (optional)
-export XDG_CONFIG_HOME="/home/user/my-configs"
+sync-models
 ```
 
-### Configuration Files
+Or refresh local defaults and OpenCode's built-in model cache:
 
-OpenCode uses JSON configuration files. Place them in:
+```bash
+./scripts/sync-all-providers.sh
+opencode models --refresh
+```
 
-1. **Global config**: `~/.config/opencode/opencode.json` (default)
-2. **Per-project config**: `./opencode.json` in your project root
-3. **Custom path**: Set `OPENCODE_CONFIG=/path/to/config.json`
+### Remote GPU server
 
-### Sample Multi-Provider Config
-
-After syncing multiple providers, your config will look like:
+Add an explicit provider to `opencode.json`:
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
   "provider": {
-    "openai": {
+    "gpu-box": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "OpenAI",
+      "name": "GPU Box",
       "options": {
-        "baseURL": "https://api.openai.com/v1",
-        "headers": { "Authorization": "Bearer sk-..." }
+        "baseURL": "http://100.100.100.100:8000/v1",
+        "apiKey": "{env:REMOTE_API_KEY}"
       },
-      "models": {
-        "gpt-4o": { "name": "GPT-4o", "tools": true },
-        "gpt-3.5-turbo": { "name": "GPT-3.5 Turbo", "tools": true }
-      }
-    },
-    "local": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "Ollama Local",
-      "options": { "baseURL": "http://localhost:11434/v1" },
-      "models": {
-        "llama3.1:8b": { "name": "Llama 3.1 8B", "tools": false },
-        "qwen3:latest": { "name": "Qwen3", "tools": true }
-      }
+      "models": {}
     }
   }
 }
 ```
 
-## 📁 Directory Structure
-
-```
-opencode-local-setup/
-├── README.md                          # This file
-├── scripts/
-│   ├── providers.mjs                 # Provider definitions & autodetection
-│   ├── sync-core.mjs                 # Shared sync/update helpers
-│   ├── sync-provider.mjs             # Universal provider sync script
-│   ├── sync-on-launch.mjs            # Refreshes configured checkpoints on launch
-│   ├── sync-local-models.mjs         # Legacy local-provider sync entry point
-│   ├── sync-all-providers.sh         # Sync all providers at once
-│   ├── install.sh                     # Automated installation
-│   └── opencode-wrapper.sh           # Shell wrapper functions
-├── configs/
-│   ├── opencode.json.example          # Basic local setup
-│   ├── opencode-fireworks.json        # Fireworks provider
-│   ├── opencode-multi-provider.json   # Multi-provider example
-│   └── opencode-remote-providers.json # Remote/LAN provider example
-├── docs/
-│   ├── troubleshooting.md             # Common issues
-│   ├── api-reference.md              # API documentation
-│   └── auth-providers.md             # Authentication reference
-└── LICENSE
-```
-
-## 🔐 Authentication
-
-### OAuth Providers
-
-Some providers require OAuth authentication via OpenCode's built-in auth system:
+For trusted tailnets, automatic discovery is available but disabled by default:
 
 ```bash
-# Login to OAuth providers (GitHub Copilot, Claude, GitLab)
-opencode auth login
-
-# List authenticated providers
-opencode auth list
-
-# Logout from a provider
-opencode auth logout
+OPENCODE_TAILSCALE_DISCOVERY=1
+OPENCODE_TAILSCALE_PORTS=1234,8000,8080,11434
 ```
 
-#### GitHub Copilot
+Only online peers and the listed ports are probed. Explicit remote providers work without discovery.
 
-1. Run `opencode auth login` and select "GitHub Copilot"
-2. Open the provided URL in your browser
-3. Enter the device code shown in terminal
-4. Authorization completes automatically
+## Security defaults
 
-#### Anthropic (Claude Max)
+- API keys remain in environment variables or OpenCode's own credential store.
+- The synchronizer converts known credentials to `{env:VARIABLE}` references.
+- Literal `Authorization` headers are removed when a safe env reference is available.
+- Config updates are atomic and permissions are restricted to the current user.
+- Tailscale scanning and post-exit sync are off unless explicitly enabled.
+- Automatic session sharing is not enabled by the installer (`share: "manual"`).
 
-1. Run `opencode auth login` and select "Anthropic"
-2. Complete browser-based OAuth flow
-3. Alternatively, use API key: `export ANTHROPIC_API_KEY="sk-ant-..."`
-
-#### GitLab Duo
-
-1. Run `opencode auth login` and select "GitLab"
-2. Complete GitLab OAuth authorization
-3. Requires GitLab Premium/Ultimate with Duo enabled
-
-### API Key Providers
-
-Set environment variables for API key authentication:
+Run the built-in audit at any time:
 
 ```bash
-# Cloud providers
-export OPENAI_API_KEY="sk-..."
-export FIREWORKS_API_KEY="fw_..."
-export DEEPSEEK_API_KEY="sk-..."
-# ... etc (see Environment Variables section)
-
-# Then sync
-./scripts/sync-all-providers.sh
+oc-doctor
 ```
 
-## 🚀 Usage
-
-### Basic Usage
+## Useful commands
 
 ```bash
-# Launch OpenCode (auto-syncs configured checkpoints)
-opencode
-
-# Use specific provider and model
-opencode -m openai/gpt-4o "Your prompt here"
-opencode -m fireworks/accounts/fireworks/models/deepseek-v3p2
-opencode -m local/llama3.2:latest
+opencode                         # Open the TUI with pre-launch sync
+opencode run "Explain this"      # Non-interactive run
+opencode models                  # List available provider/model IDs
+opencode models --refresh        # Refresh OpenCode's built-in model cache
+opencode auth login              # Authenticate a provider
+opencode upgrade                 # Upgrade OpenCode
+sync-models                      # Refresh custom compatible endpoints
+oc-doctor                        # Validate version, config and secret hygiene
 ```
 
-### Sync Methods
+## Project map
 
-#### 1. Sync All Providers (Recommended)
+```text
+scripts/
+  install.sh              Cross-platform installer
+  sync-provider.mjs       One endpoint → one OpenCode provider
+  sync-on-launch.mjs      Refresh configured endpoints safely
+  sync-all-providers.sh   Refresh common local servers
+  sync-core.mjs           JSONC, model metadata and atomic writes
+  doctor.mjs              Compatibility and secret audit
+  opencode-wrapper.sh     Bash/Zsh convenience layer
+configs/                   Current configuration examples
+docs/                      API reference, auth and troubleshooting
+tests/                     Node integration tests
+```
+
+## Upgrade from an older checkout
 
 ```bash
-# Syncs all configured providers from environment
-./scripts/sync-all-providers.sh
+git pull
+./scripts/install.sh
+oc-doctor
 ```
 
-#### 2. Sync Single Provider
+The installer preserves your existing `opencode.json` and `.env.local`. The next successful sync migrates model-level `tools` fields to `tool_call`; review any hand-written legacy agent config separately because current OpenCode uses `agent`, not `agents`.
+
+## Development
 
 ```bash
-# Set endpoint and API key
-export LOCAL_API_BASE="https://api.fireworks.ai/inference/v1"
-export FIREWORKS_API_KEY="fw_your_key_here"
-
-# Run sync
-node scripts/sync-provider.mjs
+npm run validate
 ```
 
-#### 3. Sync Local Ollama/LM Studio
+The test suite exercises JSONC, capability migration, secure credentials, atomic permissions, multi-provider refresh, and opt-in Tailscale discovery.
 
-```bash
-# For Ollama
-export LOCAL_API_BASE="http://localhost:11434/v1"
-node scripts/sync-provider.mjs
+## Documentation
 
-# For LM Studio
-export LOCAL_API_BASE="http://localhost:1234/v1"
-node scripts/sync-provider.mjs
-```
+- [Configuration and script reference](docs/api-reference.md)
+- [Authentication and credentials](docs/auth-providers.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Example configs](configs/)
 
-#### 4. Sync Remote/LAN Providers
+## License
 
-```bash
-# Sync a remote llama.cpp server over Tailscale
-export LOCAL_API_BASE="http://100.100.100.100:1234/v1"
-export OPENCODE_PROVIDER_ID="tailscale-gpu-a-1234"
-export OPENCODE_PROVIDER_NAME="Tailscale - gpu-a:1234"
-node scripts/sync-provider.mjs
-
-# Or use sync-all-providers.sh with OPENCODE_REMOTE_PROVIDERS
-export OPENCODE_REMOTE_PROVIDERS="tailscale-gpu-a-1234|http://100.100.100.100:1234/v1|NO_KEY_NEEDED,tailscale-gpu-a-1235|http://100.100.100.100:1235/v1|NO_KEY_NEEDED"
-./scripts/sync-all-providers.sh
-```
-
-### Provider Shortcuts
-
-Installation adds these to your `~/.bashrc`:
-
-```bash
-# Launch with auto-sync
-opencode [args]
-
-# Sync specific providers
-./scripts/sync-all-providers.sh
-
-# Provider-specific shortcuts
-oc-local <prompt>     # Uses local provider
-deepseek <prompt>     # Uses Fireworks DeepSeek
-```
-
-## 🔐 Security Notes
-
-- **API keys are read from environment variables**, never stored in config files (except temporarily during sync)
-- The sync script extracts keys from environment based on endpoint URL
-- **Never commit your `.env` file or config with keys**
-- The `install.sh` script checks for leaked keys before installation
-
-## 🎯 How It Works
-
-1. **Smart Detection**: Script auto-detects provider type from URL pattern
-2. **API Key Resolution**: Automatically picks correct API key for each provider
-3. **Model Discovery**: Queries the `/v1/models` OpenAI-compatible endpoint
-4. **Capability Detection**: Auto-detects if models support tools/functions
-5. **Dynamic Model Labels**: Refreshes model display names from each checkpoint response
-6. **Config Merging**: Preserves existing settings while refreshing model catalogs
-7. **Auto-Sync**: Bash wrapper syncs every configured checkpoint before launch and after exit
-
-## 🐛 Troubleshooting
-
-See [docs/troubleshooting.md](docs/troubleshooting.md) for:
-- Connection refused errors
-- Model not found issues
-- API key problems
-- Config conflicts
-- Provider-specific quirks
-
-## 🤖 Automation
-
-### Auto-Sync on Launch
-
-The installation adds a managed source block to `~/.bashrc`:
-
-```bash
-# >>> opencode-local-setup >>>
-if [ -f ~/.config/opencode/opencode-functions.sh ]; then
-  source ~/.config/opencode/opencode-functions.sh
-fi
-# <<< opencode-local-setup <<<
-```
-
-This keeps shell changes isolated and refreshes every configured provider/checkpoint so both the model list and model display names stay current when you start and close OpenCode.
-
-If `tailscale` is installed, launch sync also auto-discovers online Tailscale peers and probes OpenAI-compatible endpoints on ports `1200-1300`, `8000-8100`, and `8880-8900`. Discovered providers are added as `Tailscale - <host>:<port>`.
-
-### Cron Job (Optional)
-
-Sync models every hour:
-
-```bash
-# Add to crontab
-crontab -e
-
-# Add this line
-0 * * * * cd /path/to/opencode-local-setup && ./scripts/sync-all-providers.sh >/dev/null 2>&1
-```
-
-## 🎓 Examples
-
-### Multi-Provider Workflow
-
-```bash
-# Sync all providers
-./scripts/sync-all-providers.sh
-
-# List available models in OpenCode
-opencode
-# Then use: /models list
-
-# Use different providers for different tasks
-opencode -m openai/gpt-4o explain quantum computing
-opencode -m local/llama3.2:latest optimize this code
-opencode -m xai/grok-2:latest creative writing
-```
-
-### CI/CD Integration
-
-```yaml
-# Example GitHub Action
-- name: Sync AI Models
-  run: |
-    export LOCAL_API_BASE="${{ secrets.LOCAL_API_BASE }}"
-    export OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
-    node scripts/sync-provider.mjs
-```
-
-## 📚 API Reference
-
-For detailed configuration options, environment variables, and provider-specific settings, see [docs/api-reference.md](docs/api-reference.md).
-
-## 📝 License
-
-MIT License - See LICENSE file for details.
-
-## 🤝 Contributing
-
-Feel free to submit issues and enhancement requests!
-
----
-
-**Made with ❤️ for the OpenCode community**
+[MIT](LICENSE)
