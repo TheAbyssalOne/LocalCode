@@ -103,7 +103,10 @@ test("launch sync refreshes multiple configured providers securely", async () =>
       assert.deepEqual(cfg.provider.beta.models.beta, { name: "Beta", tool_call: false });
       assert.equal(cfg.provider.beta.options.apiKey, "{env:LOCAL_API_KEY}");
       assert.deepEqual(cfg.provider.beta.options.headers, { "X-Keep": "yes" });
-      assert.equal((await fs.stat(configPath)).mode & 0o777, 0o600);
+      // Windows has no POSIX mode bits; fs.chmod there is a no-op, so this only holds on POSIX.
+      if (process.platform !== "win32") {
+        assert.equal((await fs.stat(configPath)).mode & 0o777, 0o600);
+      }
     });
   } finally {
     await fs.rm(temp, { recursive: true, force: true });

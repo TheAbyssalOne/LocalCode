@@ -51,6 +51,62 @@ Increase the timeout only for genuinely slow links:
 OPENCODE_SYNC_TIMEOUT_MS=10000 sync-models
 ```
 
+## vLLM runs out of memory on startup
+
+The context window is almost always the cause: the KV cache scales with `--max-model-len`,
+and a model advertising 262k context cannot serve it on a consumer card. Setup derives a
+limit from detected VRAM, but the tier table is a heuristic — real capacity varies with the
+attention backend and `--gpu-memory-utilization`.
+
+Lower it explicitly:
+
+```bash
+node scripts/setup.mjs --provider vllm --model qwen3.6-27b --max-model-len 16384
+```
+
+Or drop to a smaller variant:
+
+```bash
+node scripts/setup.mjs --provider vllm --model qwen3.6-27b --quant awq4
+```
+
+`vllm.log` in `$OPENCODE_LOCAL_SETUP_DIR` holds the startup output.
+
+## vLLM on Windows is unreachable
+
+vLLM has no native Windows build, so it runs inside WSL2. It must bind `0.0.0.0` there —
+binding `127.0.0.1` inside the distro is not reachable from Windows.
+
+```powershell
+.\scripts\vllm-server.ps1 status
+```
+
+That reports the endpoint it resolved. If WSL2 localhost forwarding is disabled, the
+distro address is used instead; check it with `wsl hostname -I` and confirm the `baseURL`
+in your config matches.
+
+## A model download fails with 401 or 403
+
+The repository is gated. Accept its licence on HuggingFace, then export a token:
+
+```bash
+export HF_TOKEN='hf_...'
+```
+
+`llama3.1-8b` is the gated entry in the catalog. Its Ollama tag is not gated, so
+`--provider ollama` avoids the issue entirely.
+
+## The chosen model does not fit
+
+Setup refuses rather than picking something that will not load:
+
+```text
+No Qwen3.6 27B variant fits 8 GB VRAM. Try a smaller model: ...
+```
+
+Run `node scripts/setup.mjs --dry-run` to see what your hardware resolves to before
+committing to a download.
+
 ## Models sync but do not appear
 
 Check the exact config path and provider IDs:

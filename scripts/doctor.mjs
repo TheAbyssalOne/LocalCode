@@ -63,6 +63,29 @@ try {
   for (const [providerId, provider] of providers) {
     const baseURL = provider?.options?.baseURL;
     if (!baseURL) warn(`${providerId}: missing options.baseURL`);
+
+    // Config shape alone is a weak signal: a valid config against a dead port still
+    // means no models in OpenCode. Probe, but never fail on it - a laptop with a
+    // sleeping GPU box is a normal state, not a broken install.
+    if (baseURL) {
+      const modelCount = await fetch(`${baseURL.replace(/\/+$/, "")}/models`, {
+        signal: AbortSignal.timeout(2000),
+      })
+        .then(async (response) => (response.ok ? (await response.json())?.data?.length ?? 0 : null))
+        .catch(() => null);
+
+      if (modelCount === null) {
+        warn(`${providerId}: ${baseURL} is not responding; start the server, then run sync-models`);
+      } else if (modelCount === 0) {
+        warn(`${providerId}: reachable but serving no models`);
+      } else {
+        const configured = Object.keys(provider?.models ?? {}).length;
+        ok(`${providerId}: serving ${modelCount} model${modelCount === 1 ? "" : "s"}`);
+        if (configured === 0) {
+          warn(`${providerId}: none are in your config yet; run sync-models`);
+        }
+      }
+    }
     if (hasEmbeddedSecret(provider?.options?.apiKey)) fail(`${providerId}: literal API key found; use {env:VARIABLE}`);
 
     for (const [header, value] of Object.entries(provider?.options?.headers ?? {})) {

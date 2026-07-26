@@ -1,23 +1,20 @@
 {
-  "name": "opencode-local-setup",
-  "version": "2.0.0",
+  "name": "localcode",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
-  "description": "Secure, current OpenCode setup for local, LAN and OpenAI-compatible model servers.",
+  "description": "Run OpenCode against models on your own hardware: detect, install, serve, configure, sync.",
   "packageManager": "pnpm@10.24.0",
   "scripts": {
-    "check": "for file in scripts/*.mjs; do node --check \"$file\"; done && for file in scripts/*.sh; do bash -n \"$file\"; done",
-    "test": "pnpm run test:node && pnpm run test:install",
+    "check": "node scripts/check-syntax.mjs",
+    "test": "node --test",
     "validate": "pnpm run check && pnpm test",
-    "test:node": "node --test tests/*.test.mjs",
-    "test:install": "bash tests/install.test.sh",
-    "setup": "node scripts/full-setup.mjs",
-    "setup:ollama": "node scripts/full-setup.mjs --provider ollama",
-    "setup:lmstudio": "node scripts/full-setup.mjs --provider lmstudio",
-    "download-models": "node scripts/download-models.mjs",
-    "env-report": "node scripts/setup-env.mjs"
+    "setup": "node scripts/setup.mjs",
+    "setup:vllm": "node scripts/setup.mjs --provider vllm",
+    "setup:ollama": "node scripts/setup.mjs --provider ollama",
+    "download-models": "node scripts/download-models.mjs"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=20"
   }
 }

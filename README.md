@@ -3,273 +3,215 @@
 
   <br />
 
-  [![CI](https://github.com/groxaxo/opencode-local-setup/actions/workflows/ci.yml/badge.svg)](https://github.com/groxaxo/opencode-local-setup/actions/workflows/ci.yml)
+  [![CI](https://github.com/TheAbyssalOne/LocalCode/actions/workflows/ci.yml/badge.svg)](https://github.com/TheAbyssalOne/LocalCode/actions/workflows/ci.yml)
   [![OpenCode compatible](https://img.shields.io/badge/OpenCode-current%20schema-65e8c4)](https://opencode.ai/config.json)
-  [![Node 24+](https://img.shields.io/badge/Node-24%2B-69a7ff)](https://nodejs.org/)
+  [![Node 20+](https://img.shields.io/badge/Node-20%2B-69a7ff)](https://nodejs.org/)
   [![License: MIT](https://img.shields.io/badge/License-MIT-b281ff.svg)](LICENSE)
 
-  ### Full automated setup — from environment to running models in OpenCode.
+  ### Run OpenCode against models on your own hardware.
 
-  Detects your OS, installs prerequisites (Node.js, Ollama), downloads models, configures everything, and launches OpenCode.
+  It looks at your machine, picks a model variant that actually fits, installs and
+  starts the server, writes the OpenCode config, and keeps it in sync.
 
-  **One command. Zero manual configuration.**
-
-  [Get started](#get-started) · [What's new](#whats-new-full-automated-setup) · [See how it works](#what-happens-behind-the-scenes) · [Troubleshooting](docs/troubleshooting.md)
+  [Get started](#get-started) · [Models](#models) · [How it chooses](#how-it-chooses) · [Troubleshooting](docs/troubleshooting.md)
 </div>
 
 ---
 
-## What problem does this solve?
-
-OpenCode works beautifully with built-in providers. Local models are a little messier.
-
-You load a different model in LM Studio. You restart Ollama. You move vLLM to another machine. The model name changes, but your OpenCode configuration does not.
-
-**OpenCode Local Setup keeps the two in sync.**
-
-When you open OpenCode, it checks the model servers you configured, discovers what is actually available, and updates only the relevant part of your `opencode.json`.
-
-```text
-Your model server  →  discovers live models  →  OpenCode is ready
-```
-
-It leaves the rest of your OpenCode setup alone.
-
 ## Get started
 
-### Quick start — fully automated (recommended)
-
-**One command handles everything**: environment detection, prerequisite installation, model downloading, configuration, and launch.
+```bash
+git clone https://github.com/TheAbyssalOne/LocalCode.git
+cd LocalCode
+```
 
 ```bash
-# Unix/macOS/Linux
-git clone https://github.com/groxaxo/opencode-local-setup.git && cd opencode-local-setup
-pnpm run setup:ollama         # Auto-installs Ollama + downloads models
-
-# Windows (PowerShell)
-.\scripts\install.ps1         # Full auto-setup with LM Studio
+./scripts/install.sh          # macOS / Linux
 ```
-
-### Manual install (legacy)
-
-If you prefer to manage your model server separately:
-
-#### 1. Install OpenCode
-
-```bash
-curl -fsSL https://opencode.ai/install | bash
-```
-
-#### 2. Install this helper
-
-```bash
-git clone https://github.com/groxaxo/opencode-local-setup.git
-cd opencode-local-setup
-./scripts/install.sh          # Unix/macOS/Linux
-.\scripts\install.ps1         # Windows (PowerShell)
-```
-
-#### 3. Start your model server and open OpenCode
-
-```bash
-opencode
-```
-
-That is it. The default setup looks for LM Studio at:
-
-```text
-http://127.0.0.1:1234/v1
-```
-
-Inside OpenCode, use `/models` to choose a model.
-
-## What's new — full automated setup
-
-The installer now handles the entire chain automatically:
-
-| Step | What happens |
-|---|---|
-| **Environment detection** | Detects OS (Windows/macOS/Linux distro), Node.js version, available RAM |
-| **Prerequisite install** | Installs Node.js 18+ if missing (via Homebrew, APT, DNF, pacman, or MSI) |
-| **OpenCode install** | Auto-installs OpenCode via official installer if not present |
-| **Model server setup** | Installs Ollama on Unix (`--install-ollama`), LM Studio on Windows |
-| **Model download** | Downloads recommended models based on your RAM (4/8/16/32 GB tiers) |
-| **Configuration** | Generates `opencode.json`, `.env.local`, shell wrappers — all automated |
-
-### Setup commands
-
-```bash
-# Full auto-setup with defaults
-pnpm run setup
-
-# Specify provider and models
-node scripts/full-setup.mjs --provider ollama --models phi-3-mini,llama-3.1-8b
-
-# Skip model download (server already has them)
-node scripts/full-setup.mjs --skip-models
-
-# Install server if missing
-node scripts/full-setup.mjs --install-server
-
-# Check environment status
-pnpm run env-report
-```
-
-### Windows-specific options
 
 ```powershell
-.\scripts\install.ps1 -Provider ollama          # Use Ollama instead of LM Studio
-.\scripts\install.ps1 -InstallVLLM              # Also install vLLM (requires Python)
-.\scripts\install.ps1 -Models phi-3-mini        # Specific models only
-.\scripts\install.ps1 -SkipLMStudio             # Skip LM Studio installation
+.\scripts\install.ps1         # Windows (PowerShell 7+)
 ```
 
-### Unix-specific options
+It detects your hardware, shows you the plan, and asks before changing anything:
+
+```text
+  Detected
+    OS            linux x64
+    RAM           64 GB
+    GPU           NVIDIA GeForce RTX 4090 (24 GB VRAM)
+    OpenCode      installed
+
+  Plan
+    Server        vllm - NVIDIA GPU with 24 GB VRAM
+    Model         Qwen3.6 27B @ awq4
+    Source        QuantTrio/Qwen3.6-27B-AWQ
+    Endpoint      http://127.0.0.1:8000/v1
+    Context       32768 (capped from 262144 to fit VRAM)
+    Config        /home/you/.config/opencode/opencode.json
+
+Proceed? [Y/n]
+```
+
+Add `--yes` to skip the prompt, or `--dry-run` to see the plan and stop.
+
+## The memory profiler
+
+Model choice is computed, not guessed. See what your card can actually hold:
 
 ```bash
-./scripts/install.sh --install-ollama           # Auto-install Ollama + models
-./scripts/install.sh --provider ollama          # Use Ollama as primary
-./scripts/install.sh --models phi-3-mini        # Specific models only
-./scripts/install.sh --skip-models              # Skip model download
+node scripts/setup.mjs --profile
 ```
 
-### Model catalog
+```text
+  Memory profile - 32 GB, fp16 KV cache
 
-The built-in `models.json` includes 10+ popular models with per-provider identifiers:
+  Model                 Quant     Weights       KV   Context
+  ----------------------------------------------------------
+  Qwen3.6 27B           bf16       50.29G        -   too big  vllm
+                        fp8        25.15G    1.73G       27K  vllm
+                        awq4       13.36G   13.52G      216K  vllm
+                        q6_k       20.62G    6.26G      100K  ollama
+```
 
-| Model | RAM needed | Ollama tag | vLLM repo |
-|---|---|---|---|
-| Phi-3 Mini (3.8B) | 4 GB | `phi3:mini` | `microsoft/Phi-3-mini-4k-instruct` |
-| Qwen2.5 Coder (7B) | 8 GB | `qwen2.5-coder:7b` | `Qwen/Qwen2.5-Coder-7B-Instruct` |
-| Llama 3.1 (8B) | 8 GB | `llama3.1:8b` | `meta-llama/Meta-Llama-3.1-8B-Instruct` |
-| Gemma 2 (9B) | 8 GB | `gemma2:9b` | `google/gemma-2-9b-it` |
+That table is real arithmetic: weights from parameter count × bits-per-weight, KV cache
+from the model's own architecture. It exposes decisions a size heuristic hides — on a
+32 GB card fp8 leaves only 27K of context while 4-bit leaves 216K, so **the
+higher-precision weights are the worse choice for coding.** Selection ranks fidelity only
+after a usable context is reached.
 
-Models are auto-selected based on your available system RAM. Override with `--models`.
+It is architecture-aware. Qwen3.6 runs linear attention on 48 of its 64 layers and caches
+KV on only 16, so it holds roughly four times the context a conventional 27B would at the
+same VRAM. Profile any card without owning it:
 
-## Pick the setup you use
+```bash
+node scripts/setup.mjs --profile --vram 24 --kv-dtype fp8
+```
 
-| You run | Start with | Helper command |
+`--kv-dtype fp8` halves the cache and roughly doubles the context.
+
+## How it chooses
+
+| Hardware | Server | Note |
 |---|---|---|
-| **LM Studio** | `http://127.0.0.1:1234/v1` | `oc-lmstudio` |
-| **Ollama** | `http://127.0.0.1:11434/v1` | `oc-ollama` |
-| **vLLM** | `http://127.0.0.1:8000/v1` | `oc-vllm` |
-| **llama.cpp** | `http://127.0.0.1:8080/v1` | `oc-llamacpp` |
-| **Remote GPU server** | Any reachable OpenAI-compatible URL | Add it to `opencode.json` |
+| NVIDIA / ROCm on Linux | vLLM in a virtualenv | upstream vLLM |
+| NVIDIA on Windows | vLLM inside WSL2 | vLLM has no native Windows build |
+| Apple Silicon | Ollama | Metal; there is no practical vLLM path |
+| No GPU | Ollama | GGUF, CPU or partial offload |
 
-The helper commands synchronize that server and launch OpenCode:
+Fallbacks are always announced, never silent.
+
+Docker Model Runner also serves vLLM on Windows, but only for images published to Docker
+Hub with a `-vllm` suffix, on port 12434. It cannot serve an arbitrary HuggingFace
+repository, so it is not offered as a backend — WSL2 runs real upstream vLLM and takes any
+repo.
+
+## Models
 
 ```bash
-oc-ollama
-oc-vllm
-oc-lmstudio "Review this repository"
+node scripts/setup.mjs --model qwen3.6-27b
 ```
 
-They are prefixed with `oc-`, so they never replace the real `ollama`, `vllm`, or server commands on your computer.
+| Id | Model | Ollama | vLLM |
+|---|---|---|---|
+| `qwen3.6-27b` | Qwen3.6 27B | `qwen3.6:27b`, `:27b-q8_0` | bf16 / fp8 / awq4 |
+| `qwen3-coder-30b` | Qwen3 Coder 30B-A3B | `qwen3-coder:30b` | bf16 |
+| `qwen2.5-coder-7b` | Qwen2.5 Coder 7B *(default)* | `qwen2.5-coder:7b` | bf16 / awq4 |
+| `llama3.1-8b` | Llama 3.1 8B | `llama3.1:8b` | bf16 (gated) |
+| `phi3-mini` | Phi-3 Mini 3.8B | `phi3:mini` | bf16 |
 
-## What you get
+Every identifier in [`models.json`](models.json) is checked against the live HuggingFace
+and Ollama registries by `tests/catalog.test.mjs`, which also verifies each model's
+declared architecture against its published `config.json` — the numbers the profiler
+depends on. CI re-checks weekly, so an upstream rename or repack cannot rot the catalog
+silently.
 
-### Your model list stays fresh
+Gated repositories (Llama) need an accepted licence and `HF_TOKEN` exported before vLLM
+can fetch them. The Ollama tag is not gated.
 
-Load or remove a model on the server and OpenCode sees the change on the next sync.
+## Options
 
-### Your existing configuration is respected
+```text
+--provider <name>     vllm, ollama, lmstudio, llamacpp (auto-detected by default)
+--model <id>          Model id from models.json
+--quant <name>        Force a variant: bf16, fp8, awq4, q6_k, q4_k_m
+--max-model-len <n>   Override the profiled context limit
+--vram <gb>           Profile against a card of this size instead of the detected one
+--kv-dtype <name>     KV cache precision: fp16 (default) or fp8, which doubles context
+--tensor-parallel <n> Split across n GPUs
+--profile             Show what every catalogued model needs, then exit
+-y, --yes             Take the detected defaults, ask nothing
+--dry-run             Print the plan and exit without changing anything
+--skip-models         Do not download the model
+--skip-serve          Configure only; do not start the model server
+--skip-sync           Do not refresh the model list afterwards
+--skip-doctor         Do not run the health check
+--launch              Launch OpenCode when setup finishes
+```
 
-The synchronizer updates provider models without replacing unrelated settings, agents, MCP servers, permissions, themes, or keybindings.
+## Managing an install
 
-### Secrets stay out of the file
+```bash
+node scripts/setup.mjs --status          # what is installed, and what removal would touch
+node scripts/setup.mjs --reinstall       # remove, then install again
+node scripts/setup.mjs --uninstall       # remove files, unwire shell, drop managed providers
+node scripts/setup.mjs --uninstall --keep-config
+node scripts/setup.mjs --reset-config    # restore defaults, keep providers you added
+```
 
-API keys remain in environment variables or OpenCode's own credential store. Generated provider entries use safe references such as:
+Removal is surgical. It takes back only what it added: its own marker block in your shell
+profile, and the provider entries it created. Providers you wrote yourself, plus agents,
+MCP servers, permissions, themes and keybindings, are never touched — `--status` shows the
+split before you commit.
+
+Downloaded weights are **not** removed; they live in the model server's own store
+(`~/.ollama`, `~/.cache/huggingface`). Delete those with the server's own tools.
+
+## Commands you get
+
+After restarting your shell:
+
+```bash
+opencode              # launches OpenCode, refreshing the model list first
+sync-models           # refresh the model list from your servers
+oc-vllm               # sync vLLM and launch
+oc-ollama             # sync Ollama and launch
+oc-doctor             # config health and secret hygiene check
+download-models <provider> [model-id...]
+localcode-setup       # re-run setup
+```
+
+vLLM lifecycle:
+
+```bash
+bash "$OPENCODE_LOCAL_SETUP_DIR/vllm-server.sh" start Qwen/Qwen3.6-27B-FP8
+bash "$OPENCODE_LOCAL_SETUP_DIR/vllm-server.sh" status
+bash "$OPENCODE_LOCAL_SETUP_DIR/vllm-server.sh" stop
+```
+
+On Windows use `vllm-server.ps1` with the same verbs; it dispatches into WSL2 or Docker.
+
+## Keeping the model list fresh
+
+Load or unload a model and OpenCode sees the change on the next sync. The synchronizer
+updates provider models without touching your agents, MCP servers, permissions, themes or
+keybindings, and it accepts JSONC.
+
+Secrets stay out of the config. Generated entries reference the environment:
 
 ```json
 "apiKey": "{env:REMOTE_API_KEY}"
 ```
 
-### Local and remote machines work the same way
+- Raw API keys are never written into generated configuration.
+- Config updates are atomic and restricted to your user (`0600` on POSIX, ACL on Windows).
+- Tailscale discovery is opt-in and narrowly scoped.
+- Automatic session sharing is not enabled.
 
-A model can run on your laptop, desktop, home server, LAN workstation, or trusted Tailscale machine. If the endpoint is reachable and OpenAI-compatible, it can be synchronized.
+## Remote and LAN machines
 
-### It is designed to fail quietly
-
-A sleeping GPU box or closed LM Studio window should not stop OpenCode from opening. Launch checks use short timeouts and skip unavailable endpoints.
-
-## What happens behind the scenes?
-
-```mermaid
-flowchart LR
-  A[Your model server] -->|lists available models| B[OpenCode Local Setup]
-  B -->|updates only provider models| C[Your opencode.json]
-  C --> D[OpenCode]
-  E[Environment variables] -->|safe secret references| C
-```
-
-In plain English:
-
-1. It reads the OpenCode configuration you already use.
-2. It accepts normal JSON or JSONC with comments and trailing commas.
-3. It asks each configured server for its live model list.
-4. It refreshes model names and supported metadata.
-5. It removes models that are no longer served, unless configured otherwise.
-6. It writes the file safely and keeps it private to your user account.
-
-## Commands you will actually use
-
-### Setup commands (new)
-
-```bash
-pnpm run setup                   # Full automated setup
-node scripts/full-setup.mjs --provider ollama  # Specify provider
-node scripts/download-models.mjs ollama phi-3-mini  # Download specific model
-node scripts/setup-env.mjs       # Environment report
-```
-
-### Runtime commands
-
-```bash
-opencode                         # Open OpenCode with a quick pre-launch sync
-sync-models                      # Refresh your configured compatible servers
-download-models <provider> [models...]  # Download models from catalog
-env-report                       # Show environment status
-full-setup [options]             # Re-run full setup
-opencode models                  # Show available provider/model IDs
-opencode models --refresh        # Refresh OpenCode's built-in provider cache
-opencode auth login              # Connect a built-in cloud provider
-oc-doctor                        # Check config health and secret hygiene
-opencode upgrade                 # Upgrade OpenCode
-```
-
-### Windows PowerShell commands
-
-```powershell
-oc-lmstudio                      # Sync LM Studio and launch OpenCode
-download-models lmstudio phi-3-mini  # Download models for LM Studio
-env-report                       # Environment report
-```
-
-## Change the default server
-
-Edit the small environment file created by the installer:
-
-```bash
-$EDITOR ~/.config/opencode/local-setup/.env.local
-```
-
-For example:
-
-```bash
-LOCAL_API_BASE=http://127.0.0.1:11434/v1
-OPENCODE_PROVIDER_ID=ollama
-OPENCODE_PROVIDER_NAME="Ollama"
-```
-
-Then run:
-
-```bash
-sync-models
-```
-
-## Connect a remote GPU machine
-
-Add a provider to `~/.config/opencode/opencode.json`:
+Any reachable OpenAI-compatible endpoint can be synced — another desktop, a home server, a
+Tailscale peer. Add it to `~/.config/opencode/opencode.json`:
 
 ```json
 {
@@ -288,17 +230,8 @@ Add a provider to `~/.config/opencode/opencode.json`:
 }
 ```
 
-Export the key only when the server requires one:
-
-```bash
-export REMOTE_API_KEY="your-key"
-sync-models
-```
-
-Tailscale discovery is available for trusted networks, but remains off by default. Explicit providers work without any scanning.
-
 <details>
-<summary><strong>Enable narrowly scoped Tailscale discovery</strong></summary>
+<summary><strong>Opt-in Tailscale discovery</strong></summary>
 
 ```bash
 export OPENCODE_TAILSCALE_DISCOVERY=1
@@ -310,56 +243,20 @@ Only online peers and the ports you list are checked.
 
 </details>
 
-## Safe by default
-
-- Raw API keys are not written into generated configuration.
-- Existing OpenCode settings are preserved.
-- Config updates are atomic, reducing the chance of a half-written file.
-- File permissions are restricted to your user.
-- Tailscale discovery is opt-in.
-- Post-exit synchronization is opt-in.
-- Automatic session sharing is not enabled.
-
-Run the built-in health check whenever something feels wrong:
-
-```bash
-oc-doctor
-```
-
-## Already installed an older version?
-
-```bash
-# Unix/macOS/Linux
-cd opencode-local-setup
-git pull
-./scripts/install.sh
-oc-doctor
-
-# Windows (PowerShell)
-cd opencode-local-setup
-.\scripts\install.ps1
-oc-doctor
-```
-
-Your existing `opencode.json` and local environment file are preserved.
-
-## Built for people who
-
-- Run private or local models while coding.
-- Swap models frequently in LM Studio or Ollama.
-- Serve models with vLLM or llama.cpp.
-- Use a separate GPU workstation or home server.
-- Want a clean OpenCode setup without maintaining model IDs by hand.
-- **Want one command to handle everything** — from environment detection to running models.
-- Work across Windows, macOS, and Linux and need consistent setup everywhere.
-
 ## For contributors
 
 ```bash
 pnpm run validate
 ```
 
-The validation suite covers JSONC parsing, model metadata migration, secure credential handling, atomic writes, multi-provider refresh, installation behavior, and opt-in Tailscale discovery.
+Parses every `.mjs`, `.sh` and `.ps1` in the repo, then runs the test suite. CI runs it on
+Linux, macOS and Windows across Node 20, 22 and 24. There are no dependencies.
+
+To check the catalog against the live registries:
+
+```bash
+LOCALCODE_NETWORK_TESTS=1 node --test tests/catalog.test.mjs
+```
 
 ## More documentation
 

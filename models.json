@@ -1,287 +1,78 @@
 {
   "metadata": {
-    "version": "1.0.0",
-    "description": "OpenCode Local Models Catalog - Auto-generated recommendations based on system RAM"
+    "version": "3.0.0",
+    "description": "Local model catalog. Architecture fields drive the VRAM profiler in scripts/vram-profile.mjs; variants are ranked by bits-per-weight and the context they leave. Identifiers and architectures are checked by tests/catalog.test.mjs against the live HuggingFace and Ollama registries.",
+    "checked": "2026-07-26",
+    "arch_note": "kv_layers counts only layers that cache KV. For hybrid models it is smaller than the layer count: Qwen3.6-27B runs linear attention on 48 of 64 layers (full_attention_interval 4), so only 16 layers cache."
   },
-  "default_models": [
-    "qwen3.6-27b@q4_k_m",
-    "llama3.1-8b@q4_k_m",
-    "mistral-7b@q4_k_m"
-  ],
-  "recommended_by_ram": {
-    "8": [
-      "phi3-mini-3.8b@q4_k_m",
-      "gemma2-2b@q4_k_m"
-    ],
-    "16": [
-      "llama3.1-8b@q4_k_m",
-      "mistral-7b@q4_k_m",
-      "qwen3.6-27b@q4_k_m"
-    ],
-    "32": [
-      "qwen3.6-27b@q6_k",
-      "llama3.1-8b@q8_0",
-      "mistral-7b@q8_0"
-    ],
-    "64": [
-      "qwen3.6-27b@q8_0",
-      "llama3.1-70b@q4_k_m",
-      "mixtral-8x7b@q4_k_m"
-    ]
-  },
+  "default_model": "qwen2.5-coder-7b",
   "models": [
     {
-      "id": "phi3-mini-3.8b@q4_k_m",
-      "display_name": "Phi-3 Mini 3.8B Q4_K_M",
-      "ram_gb": 4,
-      "description": "Lightweight model for systems with limited RAM",
-      "providers": {
-        "lmstudio": {
-          "model_id": "phi3-mini-3.8b@q4_k_m"
-        },
-        "ollama": {
-          "tag": "phi3:mini",
-          "pull_command": "ollama pull phi3:mini"
-        },
-        "vllm": {
-          "hf_repo": "microsoft/Phi-3-mini-4k-instruct"
-        }
-      },
-      "download": {
-        "huggingface_repo": "microsoft/Phi-3-mini-4k-instruct-gguf",
-        "filename": "Phi-3-mini-4k-instruct-q4_k_m.gguf",
-        "file_size_bytes": 2300000000
-      }
+      "id": "qwen3.6-27b",
+      "display_name": "Qwen3.6 27B",
+      "context": 262144,
+      "reasoning": true,
+      "params_b": 27,
+      "arch": { "layers": 64, "kv_layers": 16, "kv_heads": 4, "head_dim": 256, "hybrid": true },
+      "notes": "Dense 27B with hybrid linear/full attention, Apache-2.0. Only 16 of 64 layers cache KV, so it holds far more context per GB than a conventional 27B.",
+      "vllm_args": ["--reasoning-parser", "qwen3"],
+      "variants": [
+        { "quant": "bf16", "vllm": "Qwen/Qwen3.6-27B" },
+        { "quant": "fp8", "vllm": "Qwen/Qwen3.6-27B-FP8" },
+        { "quant": "awq4", "vllm": "QuantTrio/Qwen3.6-27B-AWQ", "extra_args": ["--quantization", "awq"] },
+        { "quant": "q8_0", "ollama": "qwen3.6:27b-q8_0", "gguf": "unsloth/Qwen3.6-27B-GGUF", "gguf_file": "Qwen3.6-27B-Q8_0.gguf" },
+        { "quant": "q6_k", "ollama": "qwen3.6:27b", "gguf": "unsloth/Qwen3.6-27B-GGUF", "gguf_file": "Qwen3.6-27B-Q6_K.gguf" },
+        { "quant": "q4_k_m", "ollama": "qwen3.6:27b", "gguf": "unsloth/Qwen3.6-27B-GGUF", "gguf_file": "Qwen3.6-27B-Q4_K_M.gguf" }
+      ]
     },
     {
-      "id": "gemma2-2b@q4_k_m",
-      "display_name": "Gemma2 2B Q4_K_M",
-      "ram_gb": 2,
-      "description": "Ultra-lightweight model for constrained environments",
-      "providers": {
-        "lmstudio": {
-          "model_id": "gemma2-2b@q4_k_m"
-        },
-        "ollama": {
-          "tag": "gemma2:2b",
-          "pull_command": "ollama pull gemma2:2b"
-        },
-        "vllm": {
-          "hf_repo": "google/gemma-2-2b-it"
-        }
-      },
-      "download": {
-        "huggingface_repo": "lmstudio-community/gemma-2-2b-it-GGUF",
-        "filename": "gemma-2-2b-it-Q4_K_M.gguf",
-        "file_size_bytes": 1700000000
-      }
+      "id": "qwen3-coder-30b",
+      "display_name": "Qwen3 Coder 30B-A3B",
+      "context": 262144,
+      "params_b": 30.5,
+      "arch": { "layers": 48, "kv_layers": 48, "kv_heads": 4, "head_dim": 128 },
+      "notes": "Mixture of experts, 3B active. Fast for its size, but all 48 layers cache KV.",
+      "variants": [
+        { "quant": "bf16", "vllm": "Qwen/Qwen3-Coder-30B-A3B-Instruct" },
+        { "quant": "q4_k_m", "ollama": "qwen3-coder:30b" }
+      ]
     },
     {
-      "id": "llama3.1-8b@q4_k_m",
-      "display_name": "Llama 3.1 8B Q4_K_M",
-      "ram_gb": 6,
-      "description": "Balanced model for general-purpose tasks",
-      "providers": {
-        "lmstudio": {
-          "model_id": "llama3.1-8b@q4_k_m"
-        },
-        "ollama": {
-          "tag": "llama3.1:8b",
-          "pull_command": "ollama pull llama3.1:8b"
-        },
-        "vllm": {
-          "hf_repo": "meta-llama/Meta-Llama-3.1-8B-Instruct"
-        }
-      },
-      "download": {
-        "huggingface_repo": "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF",
-        "filename": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
-        "file_size_bytes": 5500000000
-      }
+      "id": "qwen2.5-coder-7b",
+      "display_name": "Qwen2.5 Coder 7B",
+      "context": 32768,
+      "params_b": 7.6,
+      "arch": { "layers": 28, "kv_layers": 28, "kv_heads": 4, "head_dim": 128 },
+      "notes": "Small, proven coding model. Fits almost anything. Good default.",
+      "variants": [
+        { "quant": "bf16", "vllm": "Qwen/Qwen2.5-Coder-7B-Instruct" },
+        { "quant": "awq4", "vllm": "Qwen/Qwen2.5-Coder-7B-Instruct-AWQ", "extra_args": ["--quantization", "awq"] },
+        { "quant": "q4_k_m", "ollama": "qwen2.5-coder:7b" }
+      ]
     },
     {
-      "id": "mistral-7b@q4_k_m",
-      "display_name": "Mistral 7B Q4_K_M",
-      "ram_gb": 6,
-      "description": "Efficient model with strong reasoning capabilities",
-      "providers": {
-        "lmstudio": {
-          "model_id": "mistral-7b@q4_k_m"
-        },
-        "ollama": {
-          "tag": "mistral:7b",
-          "pull_command": "ollama pull mistral:7b"
-        },
-        "vllm": {
-          "hf_repo": "mistralai/Mistral-7B-Instruct-v0.3"
-        }
-      },
-      "download": {
-        "huggingface_repo": "lmstudio-community/Mistral-7B-Instruct-v0.3-GGUF",
-        "filename": "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
-        "file_size_bytes": 4400000000
-      }
+      "id": "llama3.1-8b",
+      "display_name": "Llama 3.1 8B",
+      "context": 131072,
+      "params_b": 8,
+      "arch": { "layers": 32, "kv_layers": 32, "kv_heads": 8, "head_dim": 128 },
+      "notes": "General purpose. The HuggingFace repo is gated: vLLM needs HF_TOKEN and an accepted licence. The Ollama tag is not gated.",
+      "variants": [
+        { "quant": "bf16", "vllm": "meta-llama/Meta-Llama-3.1-8B-Instruct", "gated": true },
+        { "quant": "q4_k_m", "ollama": "llama3.1:8b" }
+      ]
     },
     {
-      "id": "qwen3.6-27b@q4_k_m",
-      "display_name": "Qwen3.6-27B Q4_K_M",
-      "ram_gb": 16,
-      "description": "High-performance model for code and complex reasoning",
-      "providers": {
-        "lmstudio": {
-          "model_id": "qwen3.6-27b@q4_k_m"
-        },
-        "ollama": {
-          "tag": "qwen3.6-27b:q4_k_m",
-          "pull_command": "ollama pull qwen3.6-27b:q4_k_m"
-        },
-        "vllm": {
-          "hf_repo": "Qwen/Qwen3.6-27B-Instruct"
-        }
-      },
-      "download": {
-        "huggingface_repo": "lmstudio-community/Qwen3.6-27B-GGUF",
-        "filename": "Qwen3.6-27B-Q4_K_M.gguf",
-        "file_size_bytes": 17580993536
-      }
-    },
-    {
-      "id": "qwen3.6-27b@q6_k",
-      "display_name": "Qwen3.6-27B Q6_K",
-      "ram_gb": 24,
-      "description": "Higher quality quantization of Qwen3.6-27B",
-      "providers": {
-        "lmstudio": {
-          "model_id": "qwen3.6-27b@q6_k"
-        },
-        "ollama": {
-          "tag": "qwen3.6-27b:q6_k",
-          "pull_command": "ollama pull qwen3.6-27b:q6_k"
-        },
-        "vllm": {
-          "hf_repo": "Qwen/Qwen3.6-27B-Instruct"
-        }
-      },
-      "download": {
-        "huggingface_repo": "lmstudio-community/Qwen3.6-27B-GGUF",
-        "filename": "Qwen3.6-27B-Q6_K.gguf",
-        "file_size_bytes": 23684901888
-      }
-    },
-    {
-      "id": "qwen3.6-27b@q8_0",
-      "display_name": "Qwen3.6-27B Q8_0",
-      "ram_gb": 32,
-      "description": "Near-lossless quantization of Qwen3.6-27B",
-      "providers": {
-        "lmstudio": {
-          "model_id": "qwen3.6-27b@q8_0"
-        },
-        "ollama": {
-          "tag": "qwen3.6-27b:q8_0",
-          "pull_command": "ollama pull qwen3.6-27b:q8_0"
-        },
-        "vllm": {
-          "hf_repo": "Qwen/Qwen3.6-27B-Instruct"
-        }
-      },
-      "download": {
-        "huggingface_repo": "lmstudio-community/Qwen3.6-27B-GGUF",
-        "filename": "Qwen3.6-27B-Q8_0.gguf",
-        "file_size_bytes": 30751493632
-      }
-    },
-    {
-      "id": "llama3.1-8b@q8_0",
-      "display_name": "Llama 3.1 8B Q8_0",
-      "ram_gb": 10,
-      "description": "High-quality quantization of Llama 3.1 8B",
-      "providers": {
-        "lmstudio": {
-          "model_id": "llama3.1-8b@q8_0"
-        },
-        "ollama": {
-          "tag": "llama3.1:8b-q8_0",
-          "pull_command": "ollama pull llama3.1:8b-q8_0"
-        },
-        "vllm": {
-          "hf_repo": "meta-llama/Meta-Llama-3.1-8B-Instruct"
-        }
-      },
-      "download": {
-        "huggingface_repo": "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF",
-        "filename": "Meta-Llama-3.1-8B-Instruct-Q8_0.gguf",
-        "file_size_bytes": 9000000000
-      }
-    },
-    {
-      "id": "mistral-7b@q8_0",
-      "display_name": "Mistral 7B Q8_0",
-      "ram_gb": 10,
-      "description": "High-quality quantization of Mistral 7B",
-      "providers": {
-        "lmstudio": {
-          "model_id": "mistral-7b@q8_0"
-        },
-        "ollama": {
-          "tag": "mistral:7b-q8_0",
-          "pull_command": "ollama pull mistral:7b-q8_0"
-        },
-        "vllm": {
-          "hf_repo": "mistralai/Mistral-7B-Instruct-v0.3"
-        }
-      },
-      "download": {
-        "huggingface_repo": "lmstudio-community/Mistral-7B-Instruct-v0.3-GGUF",
-        "filename": "Mistral-7B-Instruct-v0.3-Q8_0.gguf",
-        "file_size_bytes": 8100000000
-      }
-    },
-    {
-      "id": "llama3.1-70b@q4_k_m",
-      "display_name": "Llama 3.1 70B Q4_K_M",
-      "ram_gb": 48,
-      "description": "Large model for complex reasoning and code generation",
-      "providers": {
-        "lmstudio": {
-          "model_id": "llama3.1-70b@q4_k_m"
-        },
-        "ollama": {
-          "tag": "llama3.1:70b",
-          "pull_command": "ollama pull llama3.1:70b"
-        },
-        "vllm": {
-          "hf_repo": "meta-llama/Meta-Llama-3.1-70B-Instruct"
-        }
-      },
-      "download": {
-        "huggingface_repo": "lmstudio-community/Meta-Llama-3.1-70B-Instruct-GGUF",
-        "filename": "Meta-Llama-3.1-70B-Instruct-Q4_K_M.gguf",
-        "file_size_bytes": 43000000000
-      }
-    },
-    {
-      "id": "mixtral-8x7b@q4_k_m",
-      "display_name": "Mixtral 8x7B Q4_K_M",
-      "ram_gb": 32,
-      "description": "Mixture-of-experts model with strong performance",
-      "providers": {
-        "lmstudio": {
-          "model_id": "mixtral-8x7b@q4_k_m"
-        },
-        "ollama": {
-          "tag": "mixtral:8x7b",
-          "pull_command": "ollama pull mixtral:8x7b"
-        },
-        "vllm": {
-          "hf_repo": "mistralai/Mixtral-8x7B-Instruct-v0.1"
-        }
-      },
-      "download": {
-        "huggingface_repo": "lmstudio-community/Mixtral-8x7B-Instruct-v0.1-GGUF",
-        "filename": "Mixtral-8x7B-Instruct-v0.1-Q4_K_M.gguf",
-        "file_size_bytes": 26000000000
-      }
+      "id": "phi3-mini",
+      "display_name": "Phi-3 Mini 3.8B",
+      "context": 4096,
+      "params_b": 3.8,
+      "arch": { "layers": 32, "kv_layers": 32, "kv_heads": 32, "head_dim": 96 },
+      "notes": "Smallest useful option, for machines with no GPU worth using. No GQA, so its KV cache is heavy per token despite the small weights.",
+      "variants": [
+        { "quant": "bf16", "vllm": "microsoft/Phi-3-mini-4k-instruct" },
+        { "quant": "q4_k_m", "ollama": "phi3:mini" }
+      ]
     }
   ]
 }

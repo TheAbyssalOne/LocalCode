@@ -104,30 +104,18 @@ oc-ollama() {
 oc-vllm() {
   _oc_vllm_server="$OPENCODE_LOCAL_SETUP_DIR/vllm-server.sh"
 
-  # Start vLLM server if not running
   if ! curl -fsS http://127.0.0.1:8000/v1/models >/dev/null 2>&1; then
-    if [ -f "$_oc_vllm_server" ]; then
-      _oc_vllm_model="${VLLM_MODEL:-meta-llama/Meta-Llama-3.1-8B-Instruct}"
-
-      # Try to get model from models.json if not set via env
-      if command -v node >/dev/null 2>&1 && [ -f "$OPENCODE_LOCAL_SETUP_DIR/models.json" ]; then
-        _oc_vllm_model="$(node -e "
-          const m = require('$OPENCODE_LOCAL_SETUP_DIR/models.json');
-          const first = m.models.find(x => x.providers.vllm);
-          console.log(first ? first.providers.vllm.hf_repo : 'meta-llama/Meta-Llama-3.1-8B-Instruct');
-        " 2>/dev/null || echo "$_oc_vllm_model")"
-      fi
-
-      echo "Starting vLLM server with $_oc_vllm_model..."
-      bash "$_oc_vllm_server" start "$_oc_vllm_model" || {
-        echo "! Failed to start vLLM server. Start it manually:" >&2
-        echo "  bash \"$_oc_vllm_server\" start <hf-repo>" >&2
-        return 1
-      }
-    else
-      echo "! vLLM not installed. Run: ./scripts/install.sh --install-vllm" >&2
+    if [ ! -f "$_oc_vllm_server" ]; then
+      echo "! vLLM is not installed. Run: ./scripts/install.sh --provider vllm" >&2
       return 1
     fi
+    if [ -z "${VLLM_MODEL:-}" ]; then
+      echo "! vLLM is not running and VLLM_MODEL is unset." >&2
+      echo "  Start it with: bash \"$_oc_vllm_server\" start <hf-repo>" >&2
+      return 1
+    fi
+    echo "Starting vLLM with $VLLM_MODEL..."
+    bash "$_oc_vllm_server" start "$VLLM_MODEL" || return 1
   fi
 
   LOCAL_API_BASE="http://127.0.0.1:8000/v1" OPENCODE_PROVIDER_ID="vllm" sync-models "http://127.0.0.1:8000/v1" >/dev/null || return
@@ -172,24 +160,19 @@ download-models() {
   _oc_with_env node "$OPENCODE_LOCAL_SETUP_DIR/download-models.mjs" "$@"
 }
 
-full-setup() {
-  if ! command -v node >/dev/null 2>&1; then
-    echo "Node.js 18+ is required" >&2
-    return 1
-  fi
-  _oc_with_env node "$OPENCODE_LOCAL_SETUP_DIR/full-setup.mjs" "$@"
-}
+# ponytail: sync-provider.mjs is still shipped for single-endpoint refreshes; sync-models
+# without an argument uses the multi-provider path.
 
-env-report() {
+localcode-setup() {
   if ! command -v node >/dev/null 2>&1; then
-    echo "Node.js 18+ is required" >&2
+    echo "Node.js 20+ is required" >&2
     return 1
   fi
-  _oc_with_env node "$OPENCODE_LOCAL_SETUP_DIR/setup-env.mjs"
+  _oc_with_env node "$OPENCODE_LOCAL_SETUP_DIR/setup.mjs" "$@"
 }
 
 if [ -n "${BASH_VERSION:-}" ]; then
   export -f opencode sync-models oc-provider oc-local oc-lmstudio oc-ollama oc-vllm oc-vllm-stop oc-vllm-status oc-llamacpp
   export -f list-providers code-login code-auth oc-upgrade oc-doctor
-  export -f download-models full-setup env-report
+  export -f download-models localcode-setup
 fi

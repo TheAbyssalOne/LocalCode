@@ -80,6 +80,16 @@ Credentials are used for the discovery request but persisted only as `{env:VARIA
 | `OPENCODE_SYNC_VERBOSE` | `0` | Show launch-sync errors and summary |
 | `OPENCODE_SYNC_AFTER_EXIT` | `0` | Also refresh when the TUI exits |
 
+### Setup behavior
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `LOCALCODE_SKIP_PREREQS` | `0` | Configure only; never install OpenCode, Ollama or vLLM. Used by the test suite so a test run cannot mutate the host. |
+| `LOCALCODE_NETWORK_TESTS` | `0` | Enable the catalog tests that hit HuggingFace and the Ollama registry |
+| `VLLM_MODEL` | unset | Model `oc-vllm` starts when no server is running |
+| `VLLM_PORT` | `8000` | Port for `vllm-server.sh` / `.ps1` |
+| `HF_TOKEN` | unset | Required for gated HuggingFace repositories |
+
 ### Tailscale discovery
 
 | Variable | Default | Meaning |
@@ -113,18 +123,69 @@ Reads every custom provider containing `options.baseURL` and refreshes reachable
 OPENCODE_SYNC_VERBOSE=1 node scripts/sync-on-launch.mjs
 ```
 
-### `sync-all-providers.sh`
+To sync several fixed endpoints regardless of what is in the config, list them as providers
+in `opencode.json` — see [`configs/opencode-multi-provider.json`](../configs/opencode-multi-provider.json).
+`sync-on-launch.mjs` then refreshes whichever are reachable.
 
-Checks common local ports and any explicit `OPENCODE_REMOTE_PROVIDERS`, then refreshes OpenCode's built-in model cache when the CLI is available.
+### `setup.mjs`
 
-Remote format:
+Detects the machine, profiles memory, resolves a model variant that fits, installs and
+configures the server, starts it, waits for health, then syncs.
 
 ```bash
-export OPENCODE_REMOTE_PROVIDERS='gpu-a|http://100.64.0.10:8000/v1|REMOTE_API_KEY,gpu-b|http://10.0.0.8:1234/v1|'
-./scripts/sync-all-providers.sh
+node scripts/setup.mjs --dry-run
+node scripts/setup.mjs --provider vllm --model qwen3.6-27b --yes
+node scripts/setup.mjs --status
+node scripts/setup.mjs --uninstall
 ```
 
-Each entry is `provider-id|base-url|optional-credential-env-name`.
+### `vram-profile.mjs`
+
+Pure memory arithmetic, importable and testable without a GPU.
+
+```js
+import { profile, bestVariantFor } from "./vram-profile.mjs";
+
+profile({ vramGb: 32, paramsB: 27, quant: "q6_k",
+          arch: { kv_layers: 16, kv_heads: 4, head_dim: 256 }, maxContext: 262144 });
+// { fits: true, weightsGib: 20.62, kvGib: 6.26, maxModelLen: 102400, ... }
+```
+
+`kv_layers` counts only layers that cache KV. For hybrid models it is far below the layer
+count, and it dominates the context calculation.
+
+```bash
+node scripts/setup.mjs --profile --vram 24 --kv-dtype fp8
+```
+
+### `manage.mjs`
+
+Install lifecycle: `inspect()`, `uninstall({ keepConfig })`, `resetConfig()`. Removal is
+scoped to the providers in `MANAGED_PROVIDERS` and the marker block in the shell profile;
+everything else is left byte-for-byte intact.
+
+### `detect.mjs`
+
+Hardware and environment detection, importable on its own:
+
+```bash
+node -e "import('./scripts/detect.mjs').then(async m => console.log(await m.detect()))"
+```
+
+### `download-models.mjs`
+
+Dispatches to the server's own downloader — `ollama pull`, `hf download`, `lms get`.
+Exits non-zero if any model fails.
+
+```bash
+node scripts/download-models.mjs ollama qwen2.5-coder-7b
+```
+
+### `vllm-server.sh` / `vllm-server.ps1`
+
+vLLM lifecycle: `start <hf-repo> [args...]`, `stop`, `restart`, `status`. The PowerShell
+version dispatches into WSL2 or Docker, since vLLM has no native Windows build. Logs go to
+`$OPENCODE_LOCAL_SETUP_DIR/vllm.log`.
 
 ### `doctor.mjs`
 
@@ -153,6 +214,10 @@ node scripts/doctor.mjs
 | `oc-llamacpp` | Sync and use llama.cpp |
 | `oc-doctor` | Run the compatibility audit |
 | `oc-upgrade` | Run `opencode upgrade` |
+| `download-models <provider> [ids...]` | Download models through the server's own tool |
+| `localcode-setup [options]` | Re-run `setup.mjs` |
+
+The same helpers exist for PowerShell in `opencode-wrapper.ps1`.
 
 ## OpenCode-native commands
 
