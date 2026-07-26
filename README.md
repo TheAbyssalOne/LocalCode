@@ -5,16 +5,16 @@
 
   [![CI](https://github.com/groxaxo/opencode-local-setup/actions/workflows/ci.yml/badge.svg)](https://github.com/groxaxo/opencode-local-setup/actions/workflows/ci.yml)
   [![OpenCode compatible](https://img.shields.io/badge/OpenCode-current%20schema-65e8c4)](https://opencode.ai/config.json)
-  [![Node 18+](https://img.shields.io/badge/Node-18%2B-69a7ff)](https://nodejs.org/)
+  [![Node 24+](https://img.shields.io/badge/Node-24%2B-69a7ff)](https://nodejs.org/)
   [![License: MIT](https://img.shields.io/badge/License-MIT-b281ff.svg)](LICENSE)
 
-  ### Use the models you already run — directly inside OpenCode.
+  ### Full automated setup — from environment to running models in OpenCode.
 
-  LM Studio, Ollama, vLLM, llama.cpp, a machine on your LAN, or a GPU box over Tailscale.
+  Detects your OS, installs prerequisites (Node.js, Ollama), downloads models, configures everything, and launches OpenCode.
 
-  **No hand-written model lists. No API keys copied into config files. No fighting stale setup.**
+  **One command. Zero manual configuration.**
 
-  [Get started](#get-started) · [See how it works](#what-happens-behind-the-scenes) · [Troubleshooting](docs/troubleshooting.md)
+  [Get started](#get-started) · [What's new](#whats-new-full-automated-setup) · [See how it works](#what-happens-behind-the-scenes) · [Troubleshooting](docs/troubleshooting.md)
 </div>
 
 ---
@@ -37,21 +37,39 @@ It leaves the rest of your OpenCode setup alone.
 
 ## Get started
 
-### 1. Install OpenCode
+### Quick start — fully automated (recommended)
+
+**One command handles everything**: environment detection, prerequisite installation, model downloading, configuration, and launch.
+
+```bash
+# Unix/macOS/Linux
+git clone https://github.com/groxaxo/opencode-local-setup.git && cd opencode-local-setup
+pnpm run setup:ollama         # Auto-installs Ollama + downloads models
+
+# Windows (PowerShell)
+.\scripts\install.ps1         # Full auto-setup with LM Studio
+```
+
+### Manual install (legacy)
+
+If you prefer to manage your model server separately:
+
+#### 1. Install OpenCode
 
 ```bash
 curl -fsSL https://opencode.ai/install | bash
 ```
 
-### 2. Install this helper
+#### 2. Install this helper
 
 ```bash
 git clone https://github.com/groxaxo/opencode-local-setup.git
 cd opencode-local-setup
-./scripts/install.sh
+./scripts/install.sh          # Unix/macOS/Linux
+.\scripts\install.ps1         # Windows (PowerShell)
 ```
 
-### 3. Start your model server and open OpenCode
+#### 3. Start your model server and open OpenCode
 
 ```bash
 opencode
@@ -65,8 +83,68 @@ http://127.0.0.1:1234/v1
 
 Inside OpenCode, use `/models` to choose a model.
 
-> [!NOTE]
-> This project connects OpenCode to your model server. It does not install LM Studio, Ollama, vLLM, llama.cpp, or the models themselves.
+## What's new — full automated setup
+
+The installer now handles the entire chain automatically:
+
+| Step | What happens |
+|---|---|
+| **Environment detection** | Detects OS (Windows/macOS/Linux distro), Node.js version, available RAM |
+| **Prerequisite install** | Installs Node.js 18+ if missing (via Homebrew, APT, DNF, pacman, or MSI) |
+| **OpenCode install** | Auto-installs OpenCode via official installer if not present |
+| **Model server setup** | Installs Ollama on Unix (`--install-ollama`), LM Studio on Windows |
+| **Model download** | Downloads recommended models based on your RAM (4/8/16/32 GB tiers) |
+| **Configuration** | Generates `opencode.json`, `.env.local`, shell wrappers — all automated |
+
+### Setup commands
+
+```bash
+# Full auto-setup with defaults
+pnpm run setup
+
+# Specify provider and models
+node scripts/full-setup.mjs --provider ollama --models phi-3-mini,llama-3.1-8b
+
+# Skip model download (server already has them)
+node scripts/full-setup.mjs --skip-models
+
+# Install server if missing
+node scripts/full-setup.mjs --install-server
+
+# Check environment status
+pnpm run env-report
+```
+
+### Windows-specific options
+
+```powershell
+.\scripts\install.ps1 -Provider ollama          # Use Ollama instead of LM Studio
+.\scripts\install.ps1 -InstallVLLM              # Also install vLLM (requires Python)
+.\scripts\install.ps1 -Models phi-3-mini        # Specific models only
+.\scripts\install.ps1 -SkipLMStudio             # Skip LM Studio installation
+```
+
+### Unix-specific options
+
+```bash
+./scripts/install.sh --install-ollama           # Auto-install Ollama + models
+./scripts/install.sh --provider ollama          # Use Ollama as primary
+./scripts/install.sh --models phi-3-mini        # Specific models only
+./scripts/install.sh --skip-models              # Skip model download
+```
+
+### Model catalog
+
+The built-in `models.json` includes 10+ popular models with per-provider identifiers:
+
+| Model | RAM needed | Ollama tag | vLLM repo |
+|---|---|---|---|
+| Phi-3 Mini (3.8B) | 4 GB | `phi3:mini` | `microsoft/Phi-3-mini-4k-instruct` |
+| Qwen2.5 Coder (7B) | 8 GB | `qwen2.5-coder:7b` | `Qwen/Qwen2.5-Coder-7B-Instruct` |
+| Llama 3.1 (8B) | 8 GB | `llama3.1:8b` | `meta-llama/Meta-Llama-3.1-8B-Instruct` |
+| Gemma 2 (9B) | 8 GB | `gemma2:9b` | `google/gemma-2-9b-it` |
+
+Models are auto-selected based on your available system RAM. Override with `--models`.
 
 ## Pick the setup you use
 
@@ -135,14 +213,36 @@ In plain English:
 
 ## Commands you will actually use
 
+### Setup commands (new)
+
+```bash
+pnpm run setup                   # Full automated setup
+node scripts/full-setup.mjs --provider ollama  # Specify provider
+node scripts/download-models.mjs ollama phi-3-mini  # Download specific model
+node scripts/setup-env.mjs       # Environment report
+```
+
+### Runtime commands
+
 ```bash
 opencode                         # Open OpenCode with a quick pre-launch sync
 sync-models                      # Refresh your configured compatible servers
+download-models <provider> [models...]  # Download models from catalog
+env-report                       # Show environment status
+full-setup [options]             # Re-run full setup
 opencode models                  # Show available provider/model IDs
 opencode models --refresh        # Refresh OpenCode's built-in provider cache
 opencode auth login              # Connect a built-in cloud provider
 oc-doctor                        # Check config health and secret hygiene
 opencode upgrade                 # Upgrade OpenCode
+```
+
+### Windows PowerShell commands
+
+```powershell
+oc-lmstudio                      # Sync LM Studio and launch OpenCode
+download-models lmstudio phi-3-mini  # Download models for LM Studio
+env-report                       # Environment report
 ```
 
 ## Change the default server
@@ -229,9 +329,15 @@ oc-doctor
 ## Already installed an older version?
 
 ```bash
+# Unix/macOS/Linux
 cd opencode-local-setup
 git pull
 ./scripts/install.sh
+oc-doctor
+
+# Windows (PowerShell)
+cd opencode-local-setup
+.\scripts\install.ps1
 oc-doctor
 ```
 
@@ -244,11 +350,13 @@ Your existing `opencode.json` and local environment file are preserved.
 - Serve models with vLLM or llama.cpp.
 - Use a separate GPU workstation or home server.
 - Want a clean OpenCode setup without maintaining model IDs by hand.
+- **Want one command to handle everything** — from environment detection to running models.
+- Work across Windows, macOS, and Linux and need consistent setup everywhere.
 
 ## For contributors
 
 ```bash
-npm run validate
+pnpm run validate
 ```
 
 The validation suite covers JSONC parsing, model metadata migration, secure credential handling, atomic writes, multi-provider refresh, installation behavior, and opt-in Tailscale discovery.

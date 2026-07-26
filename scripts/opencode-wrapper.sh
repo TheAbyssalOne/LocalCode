@@ -102,8 +102,56 @@ oc-ollama() {
   oc-provider ollama "$@"
 }
 oc-vllm() {
+  _oc_vllm_server="$OPENCODE_LOCAL_SETUP_DIR/vllm-server.sh"
+
+  # Start vLLM server if not running
+  if ! curl -fsS http://127.0.0.1:8000/v1/models >/dev/null 2>&1; then
+    if [ -f "$_oc_vllm_server" ]; then
+      _oc_vllm_model="${VLLM_MODEL:-meta-llama/Meta-Llama-3.1-8B-Instruct}"
+
+      # Try to get model from models.json if not set via env
+      if command -v node >/dev/null 2>&1 && [ -f "$OPENCODE_LOCAL_SETUP_DIR/models.json" ]; then
+        _oc_vllm_model="$(node -e "
+          const m = require('$OPENCODE_LOCAL_SETUP_DIR/models.json');
+          const first = m.models.find(x => x.providers.vllm);
+          console.log(first ? first.providers.vllm.hf_repo : 'meta-llama/Meta-Llama-3.1-8B-Instruct');
+        " 2>/dev/null || echo "$_oc_vllm_model")"
+      fi
+
+      echo "Starting vLLM server with $_oc_vllm_model..."
+      bash "$_oc_vllm_server" start "$_oc_vllm_model" || {
+        echo "! Failed to start vLLM server. Start it manually:" >&2
+        echo "  bash \"$_oc_vllm_server\" start <hf-repo>" >&2
+        return 1
+      }
+    else
+      echo "! vLLM not installed. Run: ./scripts/install.sh --install-vllm" >&2
+      return 1
+    fi
+  fi
+
   LOCAL_API_BASE="http://127.0.0.1:8000/v1" OPENCODE_PROVIDER_ID="vllm" sync-models "http://127.0.0.1:8000/v1" >/dev/null || return
   oc-provider vllm "$@"
+}
+
+oc-vllm-stop() {
+  _oc_vllm_server="$OPENCODE_LOCAL_SETUP_DIR/vllm-server.sh"
+  if [ -f "$_oc_vllm_server" ]; then
+    bash "$_oc_vllm_server" stop
+  else
+    echo "! vLLM not installed." >&2
+    return 1
+  fi
+}
+
+oc-vllm-status() {
+  _oc_vllm_server="$OPENCODE_LOCAL_SETUP_DIR/vllm-server.sh"
+  if [ -f "$_oc_vllm_server" ]; then
+    bash "$_oc_vllm_server" status
+  else
+    echo "! vLLM not installed." >&2
+    return 1
+  fi
 }
 oc-llamacpp() {
   LOCAL_API_BASE="http://127.0.0.1:8080/v1" OPENCODE_PROVIDER_ID="llamacpp" sync-models "http://127.0.0.1:8080/v1" >/dev/null || return
@@ -116,7 +164,32 @@ code-auth() { command opencode auth list "$@"; }
 oc-upgrade() { command opencode upgrade "$@"; }
 oc-doctor() { _oc_with_env node "$OPENCODE_LOCAL_SETUP_DIR/doctor.mjs"; }
 
+download-models() {
+  if ! command -v node >/dev/null 2>&1; then
+    echo "Node.js 18+ is required" >&2
+    return 1
+  fi
+  _oc_with_env node "$OPENCODE_LOCAL_SETUP_DIR/download-models.mjs" "$@"
+}
+
+full-setup() {
+  if ! command -v node >/dev/null 2>&1; then
+    echo "Node.js 18+ is required" >&2
+    return 1
+  fi
+  _oc_with_env node "$OPENCODE_LOCAL_SETUP_DIR/full-setup.mjs" "$@"
+}
+
+env-report() {
+  if ! command -v node >/dev/null 2>&1; then
+    echo "Node.js 18+ is required" >&2
+    return 1
+  fi
+  _oc_with_env node "$OPENCODE_LOCAL_SETUP_DIR/setup-env.mjs"
+}
+
 if [ -n "${BASH_VERSION:-}" ]; then
-  export -f opencode sync-models oc-provider oc-local oc-lmstudio oc-ollama oc-vllm oc-llamacpp
+  export -f opencode sync-models oc-provider oc-local oc-lmstudio oc-ollama oc-vllm oc-vllm-stop oc-vllm-status oc-llamacpp
   export -f list-providers code-login code-auth oc-upgrade oc-doctor
+  export -f download-models full-setup env-report
 fi
